@@ -1,0 +1,130 @@
+@import 'tailwindcss';
+@font-face {
+	font-family: 'TestSohne';
+	src:
+		url('/fonts/test-sohne/TestSohne-Buch.woff2') format('woff2'),
+		url('/fonts/test-sohne/TestSohne-Buch.woff') format('woff');
+	font-weight: 400;
+	font-style: normal;
+	font-display: swap;
+}
+@font-face {
+	font-family: 'TestSohne';
+	src:
+		url('/fonts/test-sohne/TestSohne-Halbfett.woff2') format('woff2'),
+		url('/fonts/test-sohne/TestSohne-Halbfett.woff') format('woff');
+	font-weight: 600;
+	font-style: normal;
+	font-display: swap;
+}
+@font-face {
+	font-family: 'TestSohne';
+	src:
+		url('/fonts/test-sohne/TestSohne-Fett.woff2') format('woff2'),
+		url('/fonts/test-sohne/TestSohne-Fett.woff') format('woff');
+	font-weight: 700;
+	font-style: normal;
+	font-display: swap;
+}
+
+@theme {
+	--font-inter: 'Inter', sans-serif;
+	--font-sohne: 'TestSohne', sans-serif;
+	--font-outfit: 'Outfit', sans-serif;
+	--font-playfair: 'Playfair Display', serif;
+	--font-playpen: 'Playpen Sans', cursive;
+	--font-roboto-condensed: 'Roboto Condensed', sans-serif;
+
+	--color-brand-blue: #2f5998;
+	--color-brand-orange: #f57c22;
+	--color-brand-orange-light: #f99e5c;
+	--color-brand-blue-light: #e8f1f9;
+	--color-text-dark: #1f2a44;
+	--color-text-body: #333333;
+
+	--breakpoint-xs: 430px;
+}
+
+:global(html) {
+	scroll-behavior: smooth;
+	font-family: var(--font-inter);
+	min-width: 342px;
+	@media (max-width: 1023px) {
+		font-family: var(--font-sohne);
+	}
+}
+
+:global(body) {
+	@apply text-text-body;
+	margin: 0;
+	padding: 0;
+	overflow-x: hidden;
+	background-color: white;
+	font-family: var(--font-inter);
+	min-width: 342px;
+	@media (max-width: 1023px) {
+		font-family: var(--font-sohne);
+	}
+}
+
+h1,
+h2,
+h3,
+h4,
+h5,
+h6 {
+	font-family: var(--font-inter);
+	@media (max-width: 1023px) {
+		font-family: var(--font-sohne);
+	}
+}
+
+.glass {
+	@apply border border-slate-100 bg-white/80 backdrop-blur-md;
+}
+
+.btn-primary {
+	@apply rounded-[20px] bg-brand-orange px-6 py-2.5 text-sm font-bold text-white shadow-md transition-all duration-300 hover:bg-brand-orange/90 hover:shadow-lg active:scale-95;
+}
+
+.btn-secondary {
+	@apply rounded-full bg-brand-blue px-6 py-2.5 text-sm font-bold text-white shadow-md transition-all duration-300 hover:bg-brand-blue/90 hover:shadow-lg active:scale-95;
+}
+
+.btn-outline {
+	@apply rounded-[20px] border-2 border-brand-orange px-6 py-2.5 text-sm font-bold  transition-all duration-300 hover:bg-brand-orange hover:text-white active:scale-95;
+}
+
+.nav-link {
+	@apply text-[14px] font-semibold text-brand-blue transition-colors hover:text-brand-orange;
+}
+
+/* Specific to the new design */
+.serif-sub {
+	font-family: 'Georgia', 'Times New Roman', serif;
+	@apply italic;
+}
+
+.font-inter {
+	font-family: var(--font-inter);
+}
+
+button {
+	cursor: pointer;
+}
+
+
+.service-name {
+  font-family: 'Barlow Condensed', sans-serif;
+  font-weight: 700;
+  font-size: 22px;
+  text-transform: uppercase;
+  color: var(--ink);
+  margin-bottom: 10px;
+  letter-spacing: 0.01em;
+}
+.service-desc {
+  font-size: 14px;
+  color: var(--muted);
+  line-height: 1.65;
+}

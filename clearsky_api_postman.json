@@ -1,0 +1,39 @@
+{
+	"info": {
+		"_postman_id": "c1f7a83d-6b5a-4e8c-9d1a-8b2d99ace8fa",
+		"name": "ClearSky API",
+		"description": "ClearSky Diagnostic and Revenue Calculator API — Session 14",
+		"schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+	},
+	"item": [
+		{
+			"name": "Run Diagnostic (Manito Plumbing)",
+			"request": {
+				"method": "POST",
+				"header": [
+					{
+						"key": "Content-Type",
+						"value": "application/json"
+					}
+				],
+				"body": {
+					"mode": "raw",
+					"raw": "{\n    \"business\": {\n        \"name\": \"Manito Plumbing and Heating Ltd.\",\n        \"city\": \"Timmins\",\n        \"trade\": \"plumber\",\n        \"websiteUrl\": \"https://manitoplumbing.ca/\"\n    },\n    \"revenue\": {\n        \"annualRevenue\": 1200000,\n        \"avgSaleValue\": 3200,\n        \"missedCallsPerMonth\": 20,\n        \"capacityUtilization\": 0.75\n    },\n    \"operations\": {\n        \"yearsInBusiness\": 14,\n        \"adminStaffCount\": 1,\n        \"adminHoursPerWeek\": 8,\n        \"marketTierOverride\": null,\n        \"totalTechnicians\": 3,\n        \"avgBillableHoursPerDay\": 6,\n        \"workingDaysPerYear\": 250\n    }\n}"
+				},
+				"url": {
+					"raw": "http://localhost:5173/api/diagnostic",
+					"protocol": "http",
+					"host": [
+						"localhost"
+					],
+					"port": "5173",
+					"path": [
+						"api",
+						"diagnostic"
+					]
+				}
+			},
+			"response": []
+		}
+	]
+}

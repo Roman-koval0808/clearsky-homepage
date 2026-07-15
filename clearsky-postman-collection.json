@@ -1,0 +1,688 @@
+{
+	"info": {
+		"name": "ClearSky Revenue Model",
+		"description": "All API endpoints for the ClearSky revenue model — Layer 1 (GBP Health Gap), Layer 2 (Local Rank Gap), individual calculation verification, and full GBP Gap breakdown.\n\nBase URL: https://clearskysoftware.net (override {{baseUrl}} variable for local dev).",
+		"schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+	},
+	"variable": [
+		{
+			"key": "baseUrl",
+			"value": "https://clearskysoftware.net",
+			"type": "string"
+		},
+		{
+			"key": "businessName",
+			"value": "Manito Plumbing and Heating Ltd.",
+			"type": "string"
+		},
+		{
+			"key": "city",
+			"value": "Timmins",
+			"type": "string"
+		},
+		{
+			"key": "trade",
+			"value": "plumbing",
+			"type": "string"
+		},
+		{
+			"key": "secondaryTrade",
+			"value": "hvac",
+			"type": "string"
+		},
+		{
+			"key": "websiteUrl",
+			"value": "https://manitoplumbing.ca",
+			"type": "string"
+		},
+		{
+			"key": "yearsInBusiness",
+			"value": "14",
+			"type": "string"
+		},
+		{
+			"key": "avgSaleValue",
+			"value": "2000",
+			"type": "string"
+		},
+		{
+			"key": "compositeScore",
+			"value": "80",
+			"type": "string"
+		},
+		{
+			"key": "psiScore",
+			"value": "74",
+			"type": "string"
+		},
+		{
+			"key": "mapPackPosition",
+			"value": "1",
+			"type": "string"
+		},
+		{
+			"key": "annualRevenue",
+			"value": "300000",
+			"type": "string"
+		}
+	],
+	"item": [
+		{
+			"name": "1. Full Pipeline — Layer 1 & Layer 2",
+			"item": [
+				{
+					"name": "Layer 1 — GBP Health Gap (Full Pipeline)",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"businessName\": \"Manito Plumbing and Heating Ltd.\",\n  \"city\": \"Timmins\",\n  \"trade\": \"plumbing\",\n  \"yearsInBusiness\": 14,\n  \"websiteUrl\": \"https://manitoplumbing.ca\",\n  \"psiScore\": 74,\n  \"avgSaleValue\": 2000,\n  \"mapPackPosition\": 1\n}"
+						},
+						"url": {
+							"raw": "https://clearskysoftware.net/revenue-model-layer1",
+							"protocol": "https",
+							"host": ["clearskysoftware", "net"],
+							"path": ["revenue-model-layer1"]
+						},
+						"description": "One-click test — static body matches revenue-model-layer1 POST JSON. Same fields as fetch: businessName, city, trade, yearsInBusiness, websiteUrl, psiScore, avgSaleValue, mapPackPosition. Full pipeline: Google Places → GBP gap → modifiers → 15% discount."
+					}
+				},
+				{
+					"name": "Layer 2 — Local Rank Gap (Full Pipeline)",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"businessName\": \"Manito Plumbing and Heating Ltd.\",\n  \"city\": \"Timmins\",\n  \"trade\": \"plumbing\",\n  \"secondaryTrade\": \"hvac\",\n  \"revenueSplit\": { \"primary\": 70, \"secondary\": 30 },\n  \"websiteUrl\": \"https://manitoplumbing.ca\",\n  \"yearsInBusiness\": 14,\n  \"annualRevenue\": 300000,\n  \"avgSaleValue\": 2000,\n  \"avgSaleValueSecondary\": 3000\n}"
+						},
+						"url": {
+							"raw": "https://clearskysoftware.net/revenue-model-layer2",
+							"protocol": "https",
+							"host": ["clearskysoftware", "net"],
+							"path": ["revenue-model-layer2"]
+						},
+						"description": "One-click test — static body matches revenue-model-layer2 POST JSON. Same fields as destructuring: businessName, city, trade, secondaryTrade, revenueSplit, websiteUrl, yearsInBusiness, annualRevenue, avgSaleValue, avgSaleValueSecondary. Full pipeline: Google light → DataForSEO rank → PageSpeed → diagnostic."
+					}
+				}
+			],
+			"description": "These are the main pipeline endpoints that run the FULL calculation including live API calls to Google, DataForSEO, and PageSpeed Insights."
+		},
+		{
+			"name": "2. Variable Verification (No API Calls)",
+			"item": [
+				{
+					"name": "Benchmark Volumes — Sudbury keyword volumes per trade",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"trade\": \"{{trade}}\"\n}"
+						},
+						"url": {
+							"raw": "{{baseUrl}}/api/calc/benchmark-volumes",
+							"host": ["{{baseUrl}}"],
+							"path": ["api", "calc", "benchmark-volumes"]
+						},
+						"description": "Returns the hardcoded Sudbury benchmark search volumes per keyword.\n\nPlumbing total = 339 (287+26+20+3+3)\nHVAC total = 219 (96+52+27+27+17)\n\nThese are the base volumes before city scaling."
+					}
+				},
+				{
+					"name": "Benchmark Volumes — HVAC",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"trade\": \"hvac\"\n}"
+						},
+						"url": {
+							"raw": "{{baseUrl}}/api/calc/benchmark-volumes",
+							"host": ["{{baseUrl}}"],
+							"path": ["api", "calc", "benchmark-volumes"]
+						},
+						"description": "HVAC benchmark volumes. Total = 219."
+					}
+				},
+				{
+					"name": "City Households — scaling factor for city",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"city\": \"{{city}}\"\n}"
+						},
+						"url": {
+							"raw": "{{baseUrl}}/api/calc/city-households",
+							"host": ["{{baseUrl}}"],
+							"path": ["api", "calc", "city-households"]
+						},
+						"description": "Returns household count, scaling factor (households ÷ 73,000), and captive market uplift (× 1.20) for any city.\n\nAlso lists ALL known city clusters so you can compare."
+					}
+				},
+				{
+					"name": "Composite Score — 9 GBP signal breakdown",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"gbp\": {\n    \"rating\": 4.8,\n    \"reviewCount\": 137,\n    \"photos\": [1,2,3,4,5,6,7],\n    \"opening_hours\": true,\n    \"website\": \"https://manitoplumbing.ca\",\n    \"qa\": { \"count\": 0, \"answeredCount\": 0 },\n    \"editorialSummary\": false,\n    \"services\": [\"Plumbing\", \"Drain Cleaning\", \"Water Heater\", \"Heating\", \"Emergency\", \"Pipe Repair\", \"Sewer\"],\n    \"ownerResponseCount\": 23\n  },\n  \"yearsInBusiness\": {{yearsInBusiness}}\n}"
+						},
+						"url": {
+							"raw": "{{baseUrl}}/api/calc/composite-score",
+							"host": ["{{baseUrl}}"],
+							"path": ["api", "calc", "composite-score"]
+						},
+						"description": "Calculates the 9-signal GBP composite score (0–100) and shows each signal's earned vs max points.\n\nAlso returns:\n- penalty = min((100 − score) ÷ 100, 0.85)\n- throughput = 1 − penalty (this is what gets multiplied in the formula)"
+					}
+				},
+				{
+					"name": "Site Retention — PSI score lookup",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"mobile\": 67,\n  \"desktop\": 81\n}"
+						},
+						"url": {
+							"raw": "{{baseUrl}}/api/calc/site-retention",
+							"host": ["{{baseUrl}}"],
+							"path": ["api", "calc", "site-retention"]
+						},
+						"description": "Converts PSI performance score to site retention rate.\n\nAccepts mobile + desktop (auto-averaged) or direct psiScore.\n\nLookup table:\n90–100 → 1.00 (Green)\n70–89 → 0.90 (Amber)\n50–69 → 0.85 (Amber)\n0–49 → 0.80 (Red)"
+					}
+				},
+				{
+					"name": "Ranking CTR — map pack position lookup",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"position\": 1\n}"
+						},
+						"url": {
+							"raw": "{{baseUrl}}/api/calc/ranking-ctr",
+							"host": ["{{baseUrl}}"],
+							"path": ["api", "calc", "ranking-ctr"]
+						},
+						"description": "Returns CTR for a map pack position and the gap from #1.\n\nKey rule: If #1, raw gap = 0 but FLOOR of 0.15 is applied (always some opportunity).\n\nPos 1 → CTR 0.44, gap 0.15 (floor)\nPos 2 → CTR 0.24, gap 0.20\nPos 3 → CTR 0.17, gap 0.27\nNone → CTR 0.03, gap 0.41"
+					}
+				},
+				{
+					"name": "Ranking CTR — position 2",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"position\": 2\n}"
+						},
+						"url": {
+							"raw": "{{baseUrl}}/api/calc/ranking-ctr",
+							"host": ["{{baseUrl}}"],
+							"path": ["api", "calc", "ranking-ctr"]
+						}
+					}
+				},
+				{
+					"name": "Ranking CTR — position 3",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"position\": 3\n}"
+						},
+						"url": {
+							"raw": "{{baseUrl}}/api/calc/ranking-ctr",
+							"host": ["{{baseUrl}}"],
+							"path": ["api", "calc", "ranking-ctr"]
+						}
+					}
+				},
+				{
+					"name": "Ranking CTR — not ranked",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"position\": \"none\"\n}"
+						},
+						"url": {
+							"raw": "{{baseUrl}}/api/calc/ranking-ctr",
+							"host": ["{{baseUrl}}"],
+							"path": ["api", "calc", "ranking-ctr"]
+						}
+					}
+				},
+				{
+					"name": "Tenure Rate — years in business lookup",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"yearsInBusiness\": {{yearsInBusiness}}\n}"
+						},
+						"url": {
+							"raw": "{{baseUrl}}/api/calc/tenure-rate",
+							"host": ["{{baseUrl}}"],
+							"path": ["api", "calc", "tenure-rate"]
+						},
+						"description": "Returns the brand tenure rate for years in business.\n\n16+ yrs → +16% (Legacy)\n11–15 → +9% (Trusted)\n6–10 → +4% (Established)\n2–5 → −5% (Building)\n0–1 → −15% (New)"
+					}
+				},
+				{
+					"name": "Economic Rate — city market tier lookup",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"city\": \"{{city}}\"\n}"
+						},
+						"url": {
+							"raw": "{{baseUrl}}/api/calc/economic-rate",
+							"host": ["{{baseUrl}}"],
+							"path": ["api", "calc", "economic-rate"]
+						},
+						"description": "Returns the economic rate for a city or market tier.\n\nBooming → +15%\nActive → +5%\nNeutral → 0%\nSlow → −15%\nDepressed → −30%"
+					}
+				},
+				{
+					"name": "Modifiers — apply tenure + economic + discount",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"baseValue\": 24960,\n  \"yearsInBusiness\": {{yearsInBusiness}},\n  \"city\": \"{{city}}\",\n  \"applyDiscount\": true\n}"
+						},
+						"url": {
+							"raw": "{{baseUrl}}/api/calc/modifiers",
+							"host": ["{{baseUrl}}"],
+							"path": ["api", "calc", "modifiers"]
+						},
+						"description": "Applies tenure and economic modifiers to a base value, then the 15% ultra-conservative discount.\n\nExample: baseValue 24960 × (1 + 0.09 + 0.05) × 0.85"
+					}
+				}
+			],
+			"description": "These endpoints return lookup values and run pure calculations with NO external API calls. Use them to verify every variable in the GBP Gap formula independently."
+		},
+		{
+			"name": "3. Full GBP Gap Breakdown (Step-by-Step)",
+			"item": [
+				{
+					"name": "GBP Gap Breakdown — plumbing, Timmins, #1 for primary",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"trade\": \"{{trade}}\",\n  \"city\": \"{{city}}\",\n  \"compositeScore\": {{compositeScore}},\n  \"psiMobile\": 67,\n  \"psiDesktop\": 81,\n  \"avgSaleValue\": {{avgSaleValue}},\n  \"yearsInBusiness\": {{yearsInBusiness}},\n  \"keywords\": [\n    { \"keyword\": \"plumber\", \"position\": \"1\", \"sudburyVolume\": 287 },\n    { \"keyword\": \"emergency plumber\", \"position\": \"none\", \"sudburyVolume\": 26 },\n    { \"keyword\": \"plumbing repair\", \"position\": \"none\", \"sudburyVolume\": 20 },\n    { \"keyword\": \"drain cleaning\", \"position\": \"none\", \"sudburyVolume\": 3 },\n    { \"keyword\": \"water heater repair\", \"position\": \"none\", \"sudburyVolume\": 3 }\n  ]\n}"
+						},
+						"url": {
+							"raw": "{{baseUrl}}/api/calc/gbp-gap-breakdown",
+							"host": ["{{baseUrl}}"],
+							"path": ["api", "calc", "gbp-gap-breakdown"]
+						},
+						"description": "THE MAIN VERIFICATION ENDPOINT.\n\nRuns the full formula per keyword showing every intermediate value:\n\nGBP Gap = sudburyVolume × (households ÷ 73,000) × 1.20\n  × max(0.44 − currentCTR, 0.15)\n  × (1 − min((100 − compositeScore) ÷ 100, 0.85))\n  × siteRetentionRate × 0.10\n  × avgSaleValue × 12\n  × (1 + tenureRate + economicRate) × 0.85\n\nEach keyword runs independently. Results are summed, then modifiers and discount applied."
+					}
+				},
+				{
+					"name": "GBP Gap Breakdown — HVAC, Timmins, not ranked",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"trade\": \"hvac\",\n  \"city\": \"{{city}}\",\n  \"compositeScore\": {{compositeScore}},\n  \"psiMobile\": 67,\n  \"psiDesktop\": 81,\n  \"avgSaleValue\": 3000,\n  \"yearsInBusiness\": {{yearsInBusiness}},\n  \"keywords\": [\n    { \"keyword\": \"hvac\", \"position\": \"none\", \"sudburyVolume\": 96 },\n    { \"keyword\": \"furnace repair\", \"position\": \"none\", \"sudburyVolume\": 52 },\n    { \"keyword\": \"air conditioning\", \"position\": \"none\", \"sudburyVolume\": 27 },\n    { \"keyword\": \"heating and cooling\", \"position\": \"none\", \"sudburyVolume\": 27 },\n    { \"keyword\": \"ac repair\", \"position\": \"none\", \"sudburyVolume\": 17 }\n  ]\n}"
+						},
+						"url": {
+							"raw": "{{baseUrl}}/api/calc/gbp-gap-breakdown",
+							"host": ["{{baseUrl}}"],
+							"path": ["api", "calc", "gbp-gap-breakdown"]
+						},
+						"description": "Same formula but for HVAC trade with $3000 avg sale value. All keywords not ranked (position \"none\")."
+					}
+				},
+				{
+					"name": "GBP Gap Breakdown — plumbing, Sudbury (index city)",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"trade\": \"plumbing\",\n  \"city\": \"sudbury\",\n  \"compositeScore\": {{compositeScore}},\n  \"psiScore\": 85,\n  \"avgSaleValue\": 1500,\n  \"yearsInBusiness\": {{yearsInBusiness}},\n  \"keywords\": [\n    { \"keyword\": \"plumber\", \"position\": \"1\", \"sudburyVolume\": 287 },\n    { \"keyword\": \"emergency plumber\", \"position\": \"2\", \"sudburyVolume\": 26 },\n    { \"keyword\": \"plumbing repair\", \"position\": \"3\", \"sudburyVolume\": 20 },\n    { \"keyword\": \"drain cleaning\", \"position\": \"none\", \"sudburyVolume\": 3 },\n    { \"keyword\": \"water heater repair\", \"position\": \"none\", \"sudburyVolume\": 3 }\n  ]\n}"
+						},
+						"url": {
+							"raw": "{{baseUrl}}/api/calc/gbp-gap-breakdown",
+							"host": ["{{baseUrl}}"],
+							"path": ["api", "calc", "gbp-gap-breakdown"]
+						},
+						"description": "Sudbury = index city (73,000 households), so scaling factor = 1.0 × 1.20 = 1.20.\nMixed positions: #1, #2, #3, and not ranked to see different CTR gaps."
+					}
+				},
+				{
+					"name": "GBP Gap Breakdown — auto defaults (no keywords/score provided)",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"trade\": \"{{trade}}\",\n  \"city\": \"{{city}}\"\n}"
+						},
+						"url": {
+							"raw": "{{baseUrl}}/api/calc/gbp-gap-breakdown",
+							"host": ["{{baseUrl}}"],
+							"path": ["api", "calc", "gbp-gap-breakdown"]
+						},
+						"description": "Minimal request — uses all defaults:\n- Benchmark Sudbury volumes\n- All keywords position \"none\"\n- compositeScore 0 (no GBP data)\n- PSI 100 (full retention)\n- Default avgSaleValue for trade\n- 5 years in business"
+					}
+				}
+			],
+			"description": "The gbp-gap-breakdown endpoint is the KEY verification tool. It runs the complete GBP Gap formula per keyword and shows every intermediate value so you can follow the math."
+		},
+		{
+			"name": "4. Individual API Data Endpoints (Live Calls)",
+			"item": [
+				{
+					"name": "Google Identity — light mode (L2 style)",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"businessName\": \"{{businessName}}\",\n  \"city\": \"{{city}}\",\n  \"websiteUrl\": \"{{websiteUrl}}\",\n  \"mode\": \"light\"\n}"
+						},
+						"url": {
+							"raw": "{{baseUrl}}/api/calc/google-identity",
+							"host": ["{{baseUrl}}"],
+							"path": ["api", "calc", "google-identity"]
+						},
+						"description": "Google Places lookup — light mode returns CID, rating, reviewCount, name, website."
+					}
+				},
+				{
+					"name": "Google Identity — full mode (L1 style)",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"businessName\": \"{{businessName}}\",\n  \"city\": \"{{city}}\",\n  \"websiteUrl\": \"{{websiteUrl}}\",\n  \"mode\": \"full\"\n}"
+						},
+						"url": {
+							"raw": "{{baseUrl}}/api/calc/google-identity",
+							"host": ["{{baseUrl}}"],
+							"path": ["api", "calc", "google-identity"]
+						},
+						"description": "Google Places lookup — full mode includes photos, hours, Q&A, services, editorial summary."
+					}
+				},
+				{
+					"name": "Search Volume — live DataForSEO",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"trade\": \"{{trade}}\",\n  \"city\": \"{{city}}\"\n}"
+						},
+						"url": {
+							"raw": "{{baseUrl}}/api/calc/search-volume",
+							"host": ["{{baseUrl}}"],
+							"path": ["api", "calc", "search-volume"]
+						},
+						"description": "Fetches live keyword search volume from DataForSEO for \"trade city\" query."
+					}
+				},
+				{
+					"name": "DataForSEO Layer — Q&A + volume + services",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"identifier\": \"place_id:ChIJN1t_tDeuEmsRUsoyG83frY4\",\n  \"city\": \"{{city}}\",\n  \"trade\": \"{{trade}}\",\n  \"businessName\": \"{{businessName}}\"\n}"
+						},
+						"url": {
+							"raw": "{{baseUrl}}/api/calc/dataforseo-layer",
+							"host": ["{{baseUrl}}"],
+							"path": ["api", "calc", "dataforseo-layer"]
+						},
+						"description": "Combined DataForSEO lookup: Q&A, search volume, and GBP services.\n\nNOTE: Replace the identifier with the actual CID or place_id from the google-identity response."
+					}
+				},
+				{
+					"name": "Rank Lookup — SERP positions for 5 keywords",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"businessName\": \"{{businessName}}\",\n  \"trade\": \"{{trade}}\",\n  \"city\": \"{{city}}\"\n}"
+						},
+						"url": {
+							"raw": "{{baseUrl}}/api/calc/rank-lookup",
+							"host": ["{{baseUrl}}"],
+							"path": ["api", "calc", "rank-lookup"]
+						},
+						"description": "Fetches SERP rank positions for a business across 5 locked keywords using DataForSEO."
+					}
+				},
+				{
+					"name": "PageSpeed — live Google PSI",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"url\": \"{{websiteUrl}}\"\n}"
+						},
+						"url": {
+							"raw": "{{baseUrl}}/api/calc/pagespeed",
+							"host": ["{{baseUrl}}"],
+							"path": ["api", "calc", "pagespeed"]
+						},
+						"description": "Runs Google PageSpeed Insights and returns performance score + site retention rate."
+					}
+				},
+				{
+					"name": "GBP Gap — Layer 1 engine calculation",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"gbp\": {\n    \"place_id\": \"test\",\n    \"rating\": 4.8,\n    \"reviewCount\": 137,\n    \"photos\": [1,2,3,4,5,6,7],\n    \"opening_hours\": true,\n    \"website\": \"https://manitoplumbing.ca\",\n    \"qa\": { \"count\": 0, \"answeredCount\": 0 },\n    \"services\": [\"Plumbing\", \"Drain Cleaning\", \"Water Heater\", \"Heating\", \"Emergency\", \"Pipe Repair\", \"Sewer\"],\n    \"ownerResponseCount\": 23\n  },\n  \"monthlySearches\": 100,\n  \"avgSaleValue\": {{avgSaleValue}},\n  \"yearsInBusiness\": {{yearsInBusiness}},\n  \"psiScore\": 74,\n  \"vertical\": \"trades\"\n}"
+						},
+						"url": {
+							"raw": "{{baseUrl}}/api/calc/gbp-gap",
+							"host": ["{{baseUrl}}"],
+							"path": ["api", "calc", "gbp-gap"]
+						},
+						"description": "Pure engine calculation for Layer 1 GBP gap — no API calls. Pass in the data directly."
+					}
+				},
+				{
+					"name": "Weighted Rank Gap — Layer 2 engine calculation",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"trades\": [\n    {\n      \"trade\": \"plumbing\",\n      \"rank\": {\n        \"keywords\": [\n          { \"keyword\": \"plumber\", \"position\": \"1\", \"sudburyVolume\": 287 },\n          { \"keyword\": \"emergency plumber\", \"position\": \"none\", \"sudburyVolume\": 26 },\n          { \"keyword\": \"plumbing repair\", \"position\": \"none\", \"sudburyVolume\": 20 },\n          { \"keyword\": \"drain cleaning\", \"position\": \"none\", \"sudburyVolume\": 3 },\n          { \"keyword\": \"water heater repair\", \"position\": \"none\", \"sudburyVolume\": 3 }\n        ]\n      },\n      \"avgSaleValue\": 1500,\n      \"weightPct\": 70\n    },\n    {\n      \"trade\": \"hvac\",\n      \"rank\": {\n        \"keywords\": [\n          { \"keyword\": \"hvac\", \"position\": \"none\", \"sudburyVolume\": 96 },\n          { \"keyword\": \"furnace repair\", \"position\": \"none\", \"sudburyVolume\": 52 },\n          { \"keyword\": \"air conditioning\", \"position\": \"none\", \"sudburyVolume\": 27 },\n          { \"keyword\": \"heating and cooling\", \"position\": \"none\", \"sudburyVolume\": 27 },\n          { \"keyword\": \"ac repair\", \"position\": \"none\", \"sudburyVolume\": 17 }\n        ]\n      },\n      \"avgSaleValue\": 3000,\n      \"weightPct\": 30\n    }\n  ],\n  \"city\": \"{{city}}\",\n  \"psiScore\": 74\n}"
+						},
+						"url": {
+							"raw": "{{baseUrl}}/api/calc/weighted-rank-gap",
+							"host": ["{{baseUrl}}"],
+							"path": ["api", "calc", "weighted-rank-gap"]
+						},
+						"description": "Pure engine calculation for Layer 2 weighted rank gap — no API calls. Pass in the rank data directly."
+					}
+				},
+				{
+					"name": "Diagnostic — full engine calculation",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"diagnosticData\": {\n    \"business\": {\n      \"name\": \"{{businessName}}\",\n      \"city\": \"{{city}}\",\n      \"trade\": \"{{trade}}\",\n      \"websiteURL\": \"{{websiteUrl}}\",\n      \"monthlySearchVolume\": 287,\n      \"vertical\": \"trades\",\n      \"population\": 42000\n    },\n    \"revenue\": {\n      \"annualRevenue\": 300000,\n      \"avgSaleValue\": 1500,\n      \"avgSaleValueSecondary\": 3000\n    },\n    \"operations\": {\n      \"yearsInBusiness\": {{yearsInBusiness}},\n      \"adminStaffCount\": 1,\n      \"adminHoursPerWeek\": 8\n    },\n    \"selfReported\": {\n      \"annualRevenue\": 300000,\n      \"avgSaleValue\": 1500,\n      \"yearsInBusiness\": {{yearsInBusiness}}\n    },\n    \"gbp\": {\n      \"place_id\": \"test123\",\n      \"rating\": 4.8,\n      \"reviewCount\": 137,\n      \"photos\": [1,2,3,4,5,6,7],\n      \"opening_hours\": true,\n      \"website\": \"{{websiteUrl}}\",\n      \"qa\": { \"count\": 0, \"answeredCount\": 0 },\n      \"services\": [\"Plumbing\", \"Drain Cleaning\", \"Water Heater\", \"Heating\", \"Emergency\", \"Pipe Repair\", \"Sewer\"],\n      \"ownerResponseCount\": 23\n    },\n    \"rank\": {\n      \"keywords\": [\n        { \"keyword\": \"plumber\", \"position\": \"1\", \"sudburyVolume\": 287 },\n        { \"keyword\": \"emergency plumber\", \"position\": \"none\", \"sudburyVolume\": 26 },\n        { \"keyword\": \"plumbing repair\", \"position\": \"none\", \"sudburyVolume\": 20 },\n        { \"keyword\": \"drain cleaning\", \"position\": \"none\", \"sudburyVolume\": 3 },\n        { \"keyword\": \"water heater repair\", \"position\": \"none\", \"sudburyVolume\": 3 }\n      ],\n      \"localPackRank\": \"1\",\n      \"foundInPackCount\": 1\n    },\n    \"lighthouse\": {\n      \"performance\": 74,\n      \"seo\": 85,\n      \"accessibility\": 78,\n      \"bestPractices\": 82\n    }\n  },\n  \"intakeInputs\": {\n    \"annualRevenue\": 300000,\n    \"yearsInBusiness\": {{yearsInBusiness}}\n  }\n}"
+						},
+						"url": {
+							"raw": "{{baseUrl}}/api/calc/diagnostic",
+							"host": ["{{baseUrl}}"],
+							"path": ["api", "calc", "diagnostic"]
+						},
+						"description": "Runs the full diagnostic engine calculation (all layers combined). Pure engine, no API calls."
+					}
+				}
+			],
+			"description": "Individual endpoints for each step in the pipeline. Some call external APIs (Google, DataForSEO), some are pure engine calculations."
+		}
+	]
+}

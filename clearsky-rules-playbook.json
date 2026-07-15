@@ -1,0 +1,582 @@
+{
+  "system_metadata": {
+    "title": "ClearSky AI Signals & Decision Engine Playbook",
+    "version": "1.0.0",
+    "updated_at": "2026-05-18T15:54:23Z",
+    "description": "Consolidated deterministic playbook containing the AI extraction contract, signal evaluation rules, action library, signal-action mappings, safety compliance rules, and orchestrator policies."
+  },
+  "ai_extraction_contract": {
+    "purpose": "Define the factual data point contract that OpenAI extracts from raw text inputs. AI acts purely as a factual reader and has no power to make business decisions.",
+    "fields": [
+      {
+        "name": "contains_emergency_keywords",
+        "type": "boolean",
+        "description": "True if customer text contains active emergency safety keywords (e.g. leak, flood, burst, fire, danger)."
+      },
+      {
+        "name": "contains_problem",
+        "type": "boolean",
+        "description": "True if customer text indicates a specific customer service issue, complaint, or quality complaint."
+      },
+      {
+        "name": "contains_quote_request",
+        "type": "boolean",
+        "description": "True if customer explicitly requests pricing, estimates, a bid, or a project quote."
+      },
+      {
+        "name": "contains_callback_request",
+        "type": "boolean",
+        "description": "True if customer explicitly requests a follow-up call back by phone."
+      },
+      {
+        "name": "sentiment",
+        "type": "string",
+        "enum": ["positive", "neutral", "negative"],
+        "description": "The overall sentiment computed from the customer interaction text."
+      },
+      {
+        "name": "service_requested",
+        "type": "string",
+        "description": "Identified trade service context if mentioned (e.g., roof repair, siding, HVAC)."
+      },
+      {
+        "name": "praise_topics",
+        "type": "array of strings",
+        "description": "Key themes of praise extracted from high-rating reviews."
+      },
+      {
+        "name": "complaint_topics",
+        "type": "array of strings",
+        "description": "Key themes of complaints extracted from low-rating reviews."
+      }
+    ]
+  },
+  "signal_evaluation_rules": {
+    "google_business_profile_reviews": [
+      {
+        "signal_rule_id": "SIG-TRUST-001",
+        "signal_name": "negative_review_risk",
+        "event_type": "review_received",
+        "provider": "google_business_profile",
+        "network_category": "Trust",
+        "signal_bucket": "Risk",
+        "active": true,
+        "conditions": {
+          "review_rating": { "operator": "<=", "value": 2 }
+        },
+        "required_fields": ["review_rating"],
+        "default_priority": 1,
+        "default_confidence": 1.0,
+        "purpose": "A 1-star or 2-star review may damage trust and should be reviewed quickly."
+      },
+      {
+        "signal_rule_id": "SIG-TRUST-002",
+        "signal_name": "neutral_review_improvement_opportunity",
+        "event_type": "review_received",
+        "provider": "google_business_profile",
+        "network_category": "Trust",
+        "signal_bucket": "Opportunity",
+        "active": true,
+        "conditions": {
+          "review_rating": { "operator": "=", "value": 3 }
+        },
+        "required_fields": ["review_rating"],
+        "default_priority": 2,
+        "default_confidence": 1.0,
+        "purpose": "A 3-star review may show a fixable customer experience issue."
+      },
+      {
+        "signal_rule_id": "SIG-TRUST-003",
+        "signal_name": "positive_review_received",
+        "event_type": "review_received",
+        "provider": "google_business_profile",
+        "network_category": "Trust",
+        "signal_bucket": "Momentum",
+        "active": true,
+        "conditions": {
+          "review_rating": { "operator": ">=", "value": 4 }
+        },
+        "required_fields": ["review_rating"],
+        "default_priority": 3,
+        "default_confidence": 1.0,
+        "purpose": "A 4-star or 5-star review adds trust momentum."
+      },
+      {
+        "signal_rule_id": "SIG-TRUST-004",
+        "signal_name": "positive_review_with_minor_issue",
+        "event_type": "review_received",
+        "provider": "google_business_profile",
+        "network_category": "Trust",
+        "signal_bucket": "Opportunity",
+        "active": true,
+        "conditions": {
+          "review_rating": { "operator": ">=", "value": 4 },
+          "ai_context.contains_problem": { "operator": "=", "value": true },
+          "ai_context.confidence_score": { "operator": ">=", "value": 0.8 }
+        },
+        "required_fields": ["business_id", "review_rating", "review_text", "ai_context.contains_problem"],
+        "cooldown_hours": 24,
+        "default_priority": 3,
+        "default_confidence": 0.88,
+        "purpose": "The customer is generally happy, but the review reveals a specific issue the business can improve."
+      },
+      {
+        "signal_rule_id": "SIG-TRUST-005",
+        "signal_name": "communication_experience_issue_detected",
+        "event_type": "review_received",
+        "provider": "google_business_profile",
+        "network_category": "Trust",
+        "signal_bucket": "Bottleneck",
+        "active": true,
+        "conditions": {
+          "ai_context.contains_problem": { "operator": "=", "value": true },
+          "ai_context.complaint_topics": {
+            "operator": "contains_any",
+            "value": ["communication", "slow response", "not called back", "poor follow-up", "appointment communication"]
+          },
+          "ai_context.confidence_score": { "operator": ">=", "value": 0.8 }
+        },
+        "required_fields": ["business_id", "review_text", "ai_context.contains_problem"],
+        "cooldown_hours": 72,
+        "default_priority": 2,
+        "default_confidence": 0.9,
+        "purpose": "The review suggests a communication process issue specifically identified as a problem."
+      },
+      {
+        "signal_rule_id": "SIG-TRUST-006",
+        "signal_name": "service_quality_praise_detected",
+        "event_type": "review_received",
+        "provider": "google_business_profile",
+        "network_category": "Trust",
+        "signal_bucket": "Momentum",
+        "active": true,
+        "conditions": {
+          "ai_context.praise_topics": { "operator": "not_empty" },
+          "ai_context.contains_problem": { "operator": "=", "value": false },
+          "review_rating": { "operator": ">=", "value": 4 },
+          "ai_context.confidence_score": { "operator": ">=", "value": 0.8 }
+        },
+        "required_fields": ["review_rating", "ai_context.praise_topics"],
+        "default_priority": 3,
+        "default_confidence": 0.9,
+        "purpose": "The review contains positive language with no identified problems."
+      },
+      {
+        "signal_rule_id": "SIG-TRUST-007",
+        "signal_name": "positive_review_reply_needed",
+        "event_type": "review_received",
+        "provider": "google_business_profile",
+        "network_category": "Trust",
+        "signal_bucket": "Opportunity",
+        "active": true,
+        "conditions": {
+          "review_rating": { "operator": ">=", "value": 4 },
+          "business_reply_completed": { "operator": "=", "value": false },
+          "elapsed_hours": { "operator": ">=", "value": 24 }
+        },
+        "required_fields": ["business_id", "review_rating", "business_reply_completed"],
+        "default_priority": 2,
+        "default_confidence": 0.9,
+        "purpose": "A business should still respond to positive reviews to strengthen trust."
+      },
+      {
+        "signal_rule_id": "SIG-TRUST-008",
+        "signal_name": "negative_review_response_needed",
+        "event_type": "review_received",
+        "provider": "google_business_profile",
+        "network_category": "Trust",
+        "signal_bucket": "Risk",
+        "active": true,
+        "conditions": {
+          "review_rating": { "operator": "<=", "value": 2 },
+          "business_reply_completed": { "operator": "=", "value": false },
+          "elapsed_hours": { "operator": ">=", "value": 2 }
+        },
+        "required_fields": ["business_id", "review_rating", "business_reply_completed"],
+        "default_priority": 1,
+        "default_confidence": 0.9,
+        "purpose": "Negative reviews need a faster response window to minimize damage."
+      },
+      {
+        "signal_rule_id": "SIG-TRUST-015",
+        "signal_name": "testimonial_candidate_detected",
+        "event_type": "review_received",
+        "provider": "google_business_profile",
+        "network_category": "Trust",
+        "signal_bucket": "Opportunity",
+        "active": true,
+        "conditions": {
+          "review_rating": { "operator": ">=", "value": 4 },
+          "ai_context.praise_topics": { "operator": "not_empty" },
+          "ai_context.complaint_topics": { "operator": "empty" },
+          "ai_context.confidence_score": { "operator": ">=", "value": 0.85 }
+        },
+        "required_fields": ["review_rating", "ai_context.praise_topics", "ai_context.complaint_topics"],
+        "default_priority": 3,
+        "default_confidence": 0.9,
+        "purpose": "A strong positive review may be useful as a marketing testimonial."
+      },
+      {
+        "signal_rule_id": "SIG-TRUST-017",
+        "signal_name": "safety_compliance_risk_detected",
+        "event_type": "review_received",
+        "provider": "google_business_profile",
+        "network_category": "Trust",
+        "signal_bucket": "Risk",
+        "active": true,
+        "conditions": {
+          "ai_context.contains_emergency_keywords": { "operator": "=", "value": true },
+          "ai_context.contains_problem": { "operator": "=", "value": true },
+          "ai_context.confidence_score": { "operator": ">=", "value": 0.8 }
+        },
+        "required_fields": ["business_id", "review_text", "ai_context.contains_emergency_keywords"],
+        "default_priority": 1,
+        "default_confidence": 0.9,
+        "purpose": "The review mentions a safety concern or emergency situation which is a high-risk liability."
+      }
+    ],
+    "telnyx_voice_and_sms": [
+      {
+        "signal_rule_id": "SIG-COMM-000",
+        "signal_name": "EMERGENCY_SERVICE",
+        "event_type": "voicemail_received",
+        "provider": "telnyx_voice",
+        "network_category": "Communication",
+        "signal_bucket": "Risk",
+        "active": true,
+        "conditions": {
+          "ai_context.contains_emergency_keywords": { "operator": "=", "value": true }
+        },
+        "required_fields": ["ai_context.contains_emergency_keywords"],
+        "default_priority": 0,
+        "default_confidence": 1.0,
+        "purpose": "Critical emergency services requiring immediate dispatch bypass."
+      },
+      {
+        "signal_rule_id": "SIG-COMM-001",
+        "signal_name": "HIGH_PRIORITY_CONTACT",
+        "event_type": "voicemail_received",
+        "provider": "telnyx_voice",
+        "network_category": "Communication",
+        "signal_bucket": "Risk",
+        "active": true,
+        "conditions": {
+          "ai_context.contains_quote_request": { "operator": "=", "value": true },
+          "ai_context.contains_callback_request": { "operator": "=", "value": true }
+        },
+        "required_fields": ["ai_context.contains_quote_request", "ai_context.contains_callback_request"],
+        "default_priority": 1,
+        "default_confidence": 0.95,
+        "purpose": "Quote requests combined with callback requests are high-value leads requiring immediate response."
+      },
+      {
+        "signal_rule_id": "SIG-COMM-002",
+        "signal_name": "NEW_QUOTE_REQUEST",
+        "event_type": "voicemail_received",
+        "provider": "telnyx_voice",
+        "network_category": "Communication",
+        "signal_bucket": "Opportunity",
+        "active": true,
+        "conditions": {
+          "ai_context.contains_quote_request": { "operator": "=", "value": true }
+        },
+        "required_fields": ["ai_context.contains_quote_request"],
+        "default_priority": 1,
+        "default_confidence": 0.9,
+        "purpose": "Potential new business leads asking for pricing."
+      },
+      {
+        "signal_rule_id": "SIG-COMM-003",
+        "signal_name": "CRITICAL_CHURN_RISK",
+        "event_type": "voicemail_received",
+        "provider": "telnyx_voice",
+        "network_category": "Communication",
+        "signal_bucket": "Risk",
+        "active": true,
+        "conditions": {
+          "ai_context.contains_problem": { "operator": "=", "value": true },
+          "ai_context.contains_callback_request": { "operator": "=", "value": true }
+        },
+        "required_fields": ["ai_context.contains_problem", "ai_context.contains_callback_request"],
+        "default_priority": 1,
+        "default_confidence": 0.85,
+        "purpose": "Customers with problems who are explicitly asking for a call back are high churn risks."
+      },
+      {
+        "signal_rule_id": "SIG-COMM-004",
+        "signal_name": "BOOKING_INQUIRY",
+        "event_type": "voicemail_received",
+        "provider": "telnyx_voice",
+        "network_category": "Communication",
+        "signal_bucket": "Momentum",
+        "active": true,
+        "conditions": {
+          "ai_context.service_mentioned": { "operator": "is_not_null" },
+          "ai_context.contains_quote_request": { "operator": "=", "value": false }
+        },
+        "required_fields": ["ai_context.service_mentioned"],
+        "default_priority": 1,
+        "default_confidence": 0.9,
+        "purpose": "Customers asking about specific services represent potential revenue."
+      },
+      {
+        "signal_rule_id": "SIG-COMM-005",
+        "signal_name": "CALLBACK_REQUESTED",
+        "event_type": "voicemail_received",
+        "provider": "telnyx_voice",
+        "network_category": "Communication",
+        "signal_bucket": "Bottleneck",
+        "active": true,
+        "conditions": {
+          "ai_context.contains_callback_request": { "operator": "=", "value": true }
+        },
+        "required_fields": ["ai_context.contains_callback_request"],
+        "default_priority": 1,
+        "default_confidence": 0.9,
+        "purpose": "Any explicit request for a callback is a high-priority revenue opportunity."
+      },
+      {
+        "signal_rule_id": "SIG-COMM-006",
+        "signal_name": "SERVICE_COMPLAINT",
+        "event_type": "voicemail_received",
+        "provider": "telnyx_voice",
+        "network_category": "Communication",
+        "signal_bucket": "Bottleneck",
+        "active": true,
+        "conditions": {
+          "ai_context.contains_problem": { "operator": "=", "value": true }
+        },
+        "required_fields": ["ai_context.contains_problem"],
+        "default_priority": 2,
+        "default_confidence": 0.85,
+        "purpose": "General customer complaints detected semantically."
+      },
+      {
+        "signal_rule_id": "SIG-COMM-007",
+        "signal_name": "GENERAL_MESSAGE",
+        "event_type": "voicemail_received",
+        "provider": "telnyx_voice",
+        "network_category": "Communication",
+        "signal_bucket": "Momentum",
+        "active": true,
+        "conditions": {
+          "ai_context.contains_problem": { "operator": "=", "value": false },
+          "ai_context.contains_quote_request": { "operator": "=", "value": false },
+          "ai_context.contains_callback_request": { "operator": "=", "value": false }
+        },
+        "required_fields": [],
+        "default_priority": 3,
+        "default_confidence": 0.9,
+        "purpose": "Message doesn't contain specific high-priority facts."
+      }
+    ]
+  },
+  "action_library": [
+    {
+      "action_id": "ACT-REV-001",
+      "name": "create_review_reply_draft",
+      "domain": "REV",
+      "is_public_facing": true,
+      "default_execution_mode": "approval_required",
+      "default_owner": "consultant",
+      "required_params": ["customer_name", "rating", "platform", "brand_tone", "review_text"]
+    },
+    {
+      "action_id": "ACT-REV-002",
+      "name": "post_review_reply",
+      "domain": "REV",
+      "is_public_facing": true,
+      "default_execution_mode": "approval_required",
+      "default_owner": "consultant",
+      "required_params": ["customer_name", "rating", "platform"]
+    },
+    {
+      "action_id": "ACT-REV-004",
+      "name": "log_review_complaint_theme",
+      "domain": "REV",
+      "is_public_facing": false,
+      "default_execution_mode": "automatic",
+      "default_owner": "system",
+      "required_params": ["ai_summary", "sentiment", "complaint_topics"]
+    },
+    {
+      "action_id": "ACT-A2P-001",
+      "name": "alert_business_owner",
+      "domain": "A2P",
+      "is_public_facing": false,
+      "default_execution_mode": "automatic",
+      "default_owner": "system",
+      "required_params": ["customer_name", "ai_summary", "urgency_level"]
+    },
+    {
+      "action_id": "ACT-A2P-002",
+      "name": "create_crm_lead",
+      "domain": "A2P",
+      "is_public_facing": false,
+      "default_execution_mode": "automatic",
+      "default_owner": "system",
+      "required_params": ["customer_name", "phone_number", "intent"]
+    },
+    {
+      "action_id": "ACT-A2P-003",
+      "name": "log_a2p_interaction",
+      "domain": "A2P",
+      "is_public_facing": false,
+      "default_execution_mode": "automatic",
+      "default_owner": "system",
+      "required_params": ["provider", "event_type", "ai_summary"]
+    },
+    {
+      "action_id": "ACT-A2P-004",
+      "name": "create_emergency_dispatch_alert",
+      "domain": "A2P",
+      "is_public_facing": false,
+      "default_execution_mode": "automatic_immediate",
+      "default_owner": "system",
+      "required_params": ["customer_name", "urgency_level", "emergency_type"]
+    },
+    {
+      "action_id": "ACT-A2P-005",
+      "name": "draft_callback_script",
+      "domain": "A2P",
+      "is_public_facing": false,
+      "default_execution_mode": "approval_required",
+      "default_owner": "consultant",
+      "required_params": ["customer_name", "ai_summary"]
+    },
+    {
+      "action_id": "ACT-A2P-006",
+      "name": "flag_churn_risk_in_profile",
+      "domain": "A2P",
+      "is_public_facing": false,
+      "default_execution_mode": "automatic",
+      "default_owner": "system",
+      "required_params": ["business_id", "risk_score"]
+    },
+    {
+      "action_id": "ACT-A2P-007",
+      "name": "send_sms_followup",
+      "domain": "A2P",
+      "is_public_facing": false,
+      "default_execution_mode": "approval_required",
+      "default_owner": "consultant",
+      "required_params": ["customer_name", "phone_number"]
+    }
+  ],
+  "signal_action_mappings": [
+    { "signal_rule_id": "SIG-COMM-000", "action_id": "ACT-A2P-004", "is_primary": true, "is_secondary": false },
+    { "signal_rule_id": "SIG-COMM-000", "action_id": "ACT-A2P-001", "is_primary": false, "is_secondary": true },
+    { "signal_rule_id": "SIG-COMM-000", "action_id": "ACT-A2P-003", "is_primary": false, "is_secondary": true },
+    { "signal_rule_id": "SIG-COMM-001", "action_id": "ACT-A2P-001", "is_primary": true, "is_secondary": false },
+    { "signal_rule_id": "SIG-COMM-001", "action_id": "ACT-A2P-005", "is_primary": false, "is_secondary": true },
+    { "signal_rule_id": "SIG-COMM-001", "action_id": "ACT-A2P-003", "is_primary": false, "is_secondary": true },
+    { "signal_rule_id": "SIG-COMM-002", "action_id": "ACT-A2P-002", "is_primary": true, "is_secondary": false },
+    { "signal_rule_id": "SIG-COMM-002", "action_id": "ACT-A2P-003", "is_primary": false, "is_secondary": true },
+    { "signal_rule_id": "SIG-COMM-003", "action_id": "ACT-A2P-001", "is_primary": true, "is_secondary": false },
+    { "signal_rule_id": "SIG-COMM-003", "action_id": "ACT-A2P-006", "is_primary": false, "is_secondary": true },
+    { "signal_rule_id": "SIG-COMM-003", "action_id": "ACT-A2P-003", "is_primary": false, "is_secondary": true },
+    { "signal_rule_id": "SIG-COMM-004", "action_id": "ACT-A2P-005", "is_primary": true, "is_secondary": false },
+    { "signal_rule_id": "SIG-COMM-004", "action_id": "ACT-A2P-007", "is_primary": false, "is_secondary": true },
+    { "signal_rule_id": "SIG-COMM-004", "action_id": "ACT-A2P-003", "is_primary": false, "is_secondary": true },
+    { "signal_rule_id": "SIG-COMM-005", "action_id": "ACT-A2P-001", "is_primary": true, "is_secondary": false },
+    { "signal_rule_id": "SIG-COMM-005", "action_id": "ACT-A2P-003", "is_primary": false, "is_secondary": true },
+    { "signal_rule_id": "SIG-COMM-006", "action_id": "ACT-A2P-001", "is_primary": true, "is_secondary": false },
+    { "signal_rule_id": "SIG-COMM-006", "action_id": "ACT-A2P-006", "is_primary": false, "is_secondary": true },
+    { "signal_rule_id": "SIG-COMM-006", "action_id": "ACT-A2P-003", "is_primary": false, "is_secondary": true },
+    { "signal_rule_id": "SIG-COMM-007", "action_id": "ACT-A2P-003", "is_primary": true, "is_secondary": false },
+    { "signal_rule_id": "SIG-TRUST-001", "action_id": "ACT-REV-001", "is_primary": true, "is_secondary": false },
+    { "signal_rule_id": "SIG-TRUST-001", "action_id": "ACT-REV-004", "is_primary": false, "is_secondary": true },
+    { "signal_rule_id": "SIG-TRUST-002", "action_id": "ACT-REV-001", "is_primary": true, "is_secondary": false },
+    { "signal_rule_id": "SIG-TRUST-003", "action_id": "ACT-REV-001", "is_primary": true, "is_secondary": false },
+    { "signal_rule_id": "SIG-TRUST-004", "action_id": "ACT-REV-001", "is_primary": true, "is_secondary": false },
+    { "signal_rule_id": "SIG-TRUST-004", "action_id": "ACT-REV-004", "is_primary": false, "is_secondary": true },
+    { "signal_rule_id": "SIG-TRUST-005", "action_id": "ACT-REV-004", "is_primary": true, "is_secondary": false },
+    { "signal_rule_id": "SIG-TRUST-006", "action_id": "ACT-REV-001", "is_primary": true, "is_secondary": false },
+    { "signal_rule_id": "SIG-TRUST-007", "action_id": "ACT-REV-001", "is_primary": true, "is_secondary": false },
+    { "signal_rule_id": "SIG-TRUST-008", "action_id": "ACT-REV-001", "is_primary": true, "is_secondary": false },
+    { "signal_rule_id": "SIG-TRUST-009", "action_id": "ACT-REV-001", "is_primary": true, "is_secondary": false },
+    { "signal_rule_id": "SIG-TRUST-010", "action_id": "ACT-REV-004", "is_primary": true, "is_secondary": false },
+    { "signal_rule_id": "SIG-TRUST-011", "action_id": "ACT-REV-004", "is_primary": true, "is_secondary": false },
+    { "signal_rule_id": "SIG-TRUST-012", "action_id": "ACT-REV-004", "is_primary": true, "is_secondary": false },
+    { "signal_rule_id": "SIG-TRUST-013", "action_id": "ACT-REV-004", "is_primary": true, "is_secondary": false },
+    { "signal_rule_id": "SIG-TRUST-014", "action_id": "ACT-REV-004", "is_primary": true, "is_secondary": false },
+    { "signal_rule_id": "SIG-TRUST-015", "action_id": "ACT-REV-001", "is_primary": true, "is_secondary": false },
+    { "signal_rule_id": "SIG-TRUST-016", "action_id": "ACT-REV-001", "is_primary": true, "is_secondary": false },
+    { "signal_rule_id": "SIG-TRUST-017", "action_id": "ACT-REV-001", "is_primary": true, "is_secondary": false },
+    { "signal_rule_id": "SIG-TRUST-017", "action_id": "ACT-REV-004", "is_primary": false, "is_secondary": true }
+  ],
+  "safety_compliance_rules": [
+    {
+      "rule_id": "SAF-000",
+      "rule_name": "Emergency actions bypass all safety blocks",
+      "conditions": {
+        "signal_rule_id": { "operator": "=", "value": "SIG-COMM-000" }
+      },
+      "block_reason": "null - never blocked",
+      "severity": 0
+    },
+    {
+      "rule_id": "SAF-001",
+      "rule_name": "Block automatic posting of public replies",
+      "conditions": {
+        "action_id": { "operator": "=", "value": "ACT-REV-002" },
+        "execution_mode": { "operator": "=", "value": "automatic" }
+      },
+      "block_reason": "Safety policy prevents automatic public posting",
+      "severity": 10
+    },
+    {
+      "rule_id": "SAF-002",
+      "rule_name": "Block automatic execution of approval-required A2P actions",
+      "conditions": {
+        "action_id": { "operator": "in", "value": ["ACT-A2P-005", "ACT-A2P-007"] },
+        "execution_mode": { "operator": "=", "value": "automatic" }
+      },
+      "block_reason": "Callback scripts and SMS require human review",
+      "severity": 10
+    },
+    {
+      "rule_id": "SAF-003",
+      "rule_name": "Block SMS follow-up if caller not opted in",
+      "conditions": {
+        "action_id": { "operator": "=", "value": "ACT-A2P-007" },
+        "sms_opted_in": { "operator": "=", "value": false }
+      },
+      "block_reason": "SMS opt-in not confirmed - ACT-A2P-007 suppressed",
+      "severity": 9
+    },
+    {
+      "rule_id": "SAF-004",
+      "rule_name": "Low confidence AI block",
+      "conditions": {
+        "ai_confidence_score": { "operator": "<", "value": 0.75 },
+        "action_is_public_facing": { "operator": "=", "value": true }
+      },
+      "block_reason": "AI confidence too low for public-facing actions",
+      "severity": 8
+    }
+  ],
+  "orchestrator_rules": [
+    {
+      "rule_id": "ORC-REV-001",
+      "rule_name": "Suppress Response Needed if Risk Detected",
+      "signal_rule_id": "SIG-TRUST-001",
+      "suppress_signals": ["SIG-TRUST-008"],
+      "scope": "global"
+    },
+    {
+      "rule_id": "ORC-A2P-001",
+      "rule_name": "Emergency signal suppresses all other A2P signals",
+      "signal_rule_id": "SIG-COMM-000",
+      "suppress_signals": ["SIG-COMM-001", "SIG-COMM-002", "SIG-COMM-003", "SIG-COMM-004", "SIG-COMM-005", "SIG-COMM-006", "SIG-COMM-007"],
+      "scope": "global"
+    },
+    {
+      "rule_id": "ORC-A2P-002",
+      "rule_name": "Churn risk suppresses general inquiry",
+      "signal_rule_id": "SIG-COMM-003",
+      "suppress_signals": ["SIG-COMM-007"],
+      "scope": "global"
+    }
+  ]
+}

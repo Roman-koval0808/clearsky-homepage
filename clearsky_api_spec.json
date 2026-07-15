@@ -1,0 +1,211 @@
+{
+  "project": "ClearSky Engine",
+  "modules": [
+    {
+      "name": "Revenue Calculator",
+      "description": "Calculates revenue gaps and recovery scenarios based on business intake data.",
+      "endpoints": [
+        {
+          "path": "/api/revenue-calculator",
+          "method": "POST",
+          "description": "Primary calculation engine for the revenue calculator module.",
+          "payload_structure": {
+            "business": {
+              "name": "string",
+              "city": "string",
+              "trade": "string (e.g., plumber, hvac)",
+              "websiteUrl": "string | null"
+            },
+            "revenue": {
+              "annualRevenue": "number",
+              "avgSaleValue": "number",
+              "missedCallsPerMonth": "number",
+              "capacityUtilization": "number (0.0 to 1.0)"
+            },
+            "operations": {
+              "yearsInBusiness": "number",
+              "adminStaffCount": "number",
+              "adminHoursPerWeek": "number",
+              "marketTierOverride": "string | null",
+              "totalTechnicians": "number",
+              "avgBillableHoursPerDay": "number",
+              "workingDaysPerYear": "number"
+            }
+          },
+          "example": {
+            "business": {
+              "name": "Manito Plumbing and Heating Ltd.",
+              "city": "Timmins",
+              "trade": "plumber",
+              "websiteUrl": "https://manitoplumbing.ca/"
+            },
+            "revenue": {
+              "annualRevenue": 1200000,
+              "avgSaleValue": 3200,
+              "missedCallsPerMonth": 20,
+              "capacityUtilization": 0.75
+            },
+            "operations": {
+              "yearsInBusiness": 14,
+              "adminStaffCount": 1,
+              "adminHoursPerWeek": 8,
+              "marketTierOverride": null,
+              "totalTechnicians": 3,
+              "avgBillableHoursPerDay": 6,
+              "workingDaysPerYear": 250
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "ContentRadar",
+      "description": "Proprietary content intelligence platform for law firms (Family Law Vertical).",
+      "endpoints": [
+        {
+          "path": "/api/audit",
+          "method": "POST",
+          "description": "Launches the full signal audit and scoring pipeline.",
+          "payload_structure": {
+            "firmName": "string",
+            "city": "string",
+            "websiteUrl": "string",
+            "linkedinUrl": "string (optional)",
+            "facebookUrl": "string (optional)",
+            "instagramUrl": "string (optional)",
+            "yearsInBusiness": "number"
+          },
+          "example": {
+            "firmName": "Suzanne Desrosiers Professional Corporation",
+            "city": "Timmins",
+            "websiteUrl": "https://sdlawtimmins.com",
+            "yearsInBusiness": 26
+          }
+        },
+        {
+          "path": "/api/audit/cached",
+          "method": "GET",
+          "params": {
+            "firm": "string (The name of the firm to retrieve)"
+          },
+          "description": "Retrieves previously cached audit data from Redis."
+        },
+        {
+          "path": "/api/audit/download-pdf",
+          "method": "GET",
+          "params": {
+            "firm": "string (The name of the firm)"
+          },
+          "description": "Generates and downloads a PDF report for the audited firm."
+        }
+      ]
+    },
+    {
+      "name": "Sessions",
+      "description": "Digital Health Diagnostic tool for home service businesses.",
+      "endpoints": [
+        {
+          "path": "/api/diagnostic",
+          "method": "POST",
+          "description": "Executes the orchestrator for full digital health diagnostics.",
+          "payload_structure": {
+            "business": {
+              "name": "string",
+              "city": "string",
+              "trade": "string",
+              "website": "string"
+            },
+            "annualRevenue": "number",
+            "avgSaleValue": "number",
+            "yearsInBusiness": "number",
+            "currentCapacityPct": "number (0-100)",
+            "missedCallRate": "number (0-100)",
+            "crewCount": "number",
+            "adminHoursPerWeek": "number",
+            "seasonBreakdown": "object (Record<string, number>)"
+          },
+          "example": {
+            "business": {
+              "name": "Manito Plumbing and Heating Ltd.",
+              "city": "Timmins",
+              "trade": "Plumber",
+              "website": "https://manitoplumbing.ca/"
+            },
+            "annualRevenue": 1200000,
+            "avgSaleValue": 3200,
+            "yearsInBusiness": 14,
+            "currentCapacityPct": 25,
+            "missedCallRate": 20,
+            "crewCount": 3,
+            "adminHoursPerWeek": 8,
+            "seasonBreakdown": { "q1": 25, "q2": 25, "q3": 25, "q4": 25 }
+          }
+        },
+        {
+          "path": "/api/trades",
+          "method": "GET",
+          "description": "Retrieves the list of supported trades and their associated seasonal patterns."
+        }
+      ]
+    }
+  ],
+  "external_services": [
+    {
+      "name": "Google Places API",
+      "purpose": "Business identity verification, rating lookup, and review sentiment analysis.",
+      "endpoints": [
+        {
+          "url": "https://maps.googleapis.com/maps/api/place/findplacefromtext/json",
+          "method": "GET",
+          "params": ["input", "inputtype", "fields", "key"]
+        },
+        {
+          "url": "https://maps.googleapis.com/maps/api/place/details/json",
+          "method": "GET",
+          "params": ["place_id", "fields", "key"]
+        }
+      ]
+    },
+    {
+      "name": "OpenAI API",
+      "purpose": "NLP analysis of scraped website content and diagnostic signal extraction.",
+      "endpoints": [
+        {
+          "url": "https://api.openai.com/v1/chat/completions",
+          "method": "POST",
+          "models": ["gpt-4o", "gpt-4o-mini"],
+          "usage": "Extracting JSON signals from markdown content and scoring law firm signals."
+        }
+      ]
+    },
+    {
+      "name": "Firecrawl API",
+      "purpose": "Full-page website scraping and markdown conversion.",
+      "endpoints": [
+        {
+          "url": "https://api.firecrawl.dev/v1/scrape",
+          "method": "POST",
+          "body": { "url": "string", "formats": ["markdown"] }
+        }
+      ]
+    },
+    {
+      "name": "Apify (Google Search Scraper)",
+      "purpose": "Competitive market analysis (Paid Ads, LSAs) and social tracking.",
+      "endpoints": [
+        {
+          "url": "https://api.apify.com/v2/acts/apify~google-search-scraper/runs",
+          "method": "POST",
+          "body": { "queries": "string", "maxPagesPerQuery": 1, "includeAds": true, "includeLsas": true }
+        }
+      ]
+    }
+  ],
+  "environment_variables_used": [
+    "GOOGLE_MAPS_API_KEY",
+    "GOOGLE_PAGESPEED_API_KEY",
+    "FIRECRAWL_API_KEY",
+    "DATA365_API_KEY (used for Apify token)",
+    "AI_SEARCH_API_KEY (used for OpenAI)"
+  ]
+}

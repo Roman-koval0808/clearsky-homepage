@@ -1,0 +1,1686 @@
+========================================
+FILE: src/lib/clearsky/dashboard-state.svelte.ts
+========================================
+
+import { browser } from '$app/environment';
+
+/**
+ * STRICT ACTION LIBRARY (Technical Spec Doc Adherence)
+ * Each Action ID represents a reusable capability, not a one-off instruction.
+ */
+export const ACTION_LIBRARY = {
+    'ACT-REV-001': {
+        title: 'Draft Review Response',
+        description: 'Create a context-aware response draft for customer reviews.',
+        base_priority: 2,
+        default_mode: 'approval_required'
+    },
+    'ACT-COM-002': {
+        title: 'Urgent Owner Notification',
+        description: 'Send immediate SMS/Email alert to business owner.',
+        base_priority: 1,
+        default_mode: 'automatic'
+    },
+    'ACT-CRM-003': {
+        title: 'Update CRM Record',
+        description: 'Sync extracted customer intent or sentiment to CRM.',
+        base_priority: 3,
+        default_mode: 'automatic'
+    },
+    'ACT-SYS-004': {
+        title: 'Trigger System Health Check',
+        description: 'Initiate automated diagnostics based on reported anomalies.',
+        base_priority: 2,
+        default_mode: 'automatic'
+    }
+} as const;
+
+export type ActionId = keyof typeof ACTION_LIBRARY;
+
+export type DashboardData = {
+    providers: any[];
+    events: any[];
+    signals: any[];
+    enrichments: Record<string, any>;
+    actionQueue: any[];
+    approvals: any[]; 
+    metrics: Record<string, number>;
+};
+
+const DEFAULT_DATA: DashboardData = {
+    providers: [
+        { id: 'telnyx_voice', name: 'Telnyx Voice', icon: 'telnyx' },
+        { id: 'telnyx_sms', name: 'Telnyx SMS', icon: 'telnyx' },
+        { id: 'google_business_profile', name: 'Google Business Profile', icon: 'google' },
+        { id: 'clearsky_website_forms', name: 'Website Forms', icon: 'social' },
+        { id: 'email_provider', name: 'Email', icon: 'email' },
+        { id: 'dataforseo', name: 'DataForSEO', icon: 'dataforseo' },
+        { id: 'matomo_analytics', name: 'Matomo Analytics', icon: 'social' },
+        { id: 'clearsky_viewroom', name: 'ClearSky ViewRoom', icon: 'social' },
+        { id: 'fotojobber', name: 'Fotojobber', icon: 'social' },
+        { id: 'quote_systems', name: 'Quote Systems', icon: 'crm' },
+        { id: 'booking_systems', name: 'Booking Systems', icon: 'crm' },
+        { id: 'crms', name: 'Internal CRM', icon: 'crm' },
+        { id: 'social_media', name: 'Social Media', icon: 'social' },
+        { id: 'competitor_intelligence', name: 'Competitor Intelligence', icon: 'social' },
+        { id: 'contentradar', name: 'ContentRadar', icon: 'social' },
+        { id: 'system_health', name: 'System Health', icon: 'social' }
+    ],
+    events: [],
+    signals: [],
+    enrichments: {},
+    actionQueue: [],
+    approvals: [],
+    metrics: {
+        revenue_growth: 18,
+        booked_work: 22,
+        reputation_score: 4.8
+    }
+};
+
+class DashboardState {
+    #data = $state<DashboardData>(DEFAULT_DATA);
+    #selectedEventId = $state<string | null>(null);
+    #activeBucket = $state<string | null>(null);
+
+    constructor() {
+        if (browser) {
+            this.#load();
+            window.addEventListener('storage', (e) => {
+                if (e.key === 'clearsky_dashboard_data') this.#load();
+            });
+        }
+    }
+
+    #load() {
+        if (browser) {
+            const saved = localStorage.getItem('clearsky_dashboard_data');
+            if (saved) {
+                try {
+                    const parsed = JSON.parse(saved);
+                    if (!parsed.enrichments) parsed.enrichments = {};
+                    if (!Array.isArray(parsed.approvals)) parsed.approvals = [];
+                    if (parsed.providers && parsed.providers.length < 16) parsed.providers = DEFAULT_DATA.providers;
+
+                    if (parsed.events) {
+                        const seen = new Set();
+                        parsed.events = parsed.events.filter((e: any) => {
+                            if (seen.has(e.id)) return false;
+                            seen.add(e.id);
+                            return true;
+                        });
+                    }
+                    this.#data = parsed;
+                    if (!this.#selectedEventId && this.#data.events.length > 0) {
+                        this.#selectedEventId = this.#data.events[0].id;
+                    }
+                } catch (e) { console.error(e); }
+            }
+        }
+    }
+
+    get data() { return this.#data; }
+    get selectedEventId() { return this.#selectedEventId; }
+    get activeBucket() { return this.#activeBucket; }
+    set activeBucket(bucket: string | null) { this.#activeBucket = bucket; }
+
+    get filteredEvents() {
+        if (!this.#activeBucket) return this.#data.events;
+        const eventIdsInBucket = new Set(this.#data.signals.filter(s => s.bucket === this.#activeBucket).map(s => s.event_id));
+        return this.#data.events.filter(e => eventIdsInBucket.has(e.id));
+    }
+
+    get filteredActions() {
+        if (!this.#activeBucket) return this.#data.actionQueue;
+        const eventIdsInBucket = new Set(this.#data.signals.filter(s => s.bucket === this.#activeBucket).map(s => s.event_id));
+        return this.#data.actionQueue.filter(a => eventIdsInBucket.has(a.event_id));
+    }
+
+    get currentEnrichment() {
+        if (!this.#selectedEventId) return null;
+        return this.#data.enrichments[this.#selectedEventId] || null;
+    }
+
+    selectEvent(id: string) { this.#selectedEventId = id; }
+
+    toggleBucket(bucket: string) {
+        this.#activeBucket = this.#activeBucket === bucket ? null : bucket;
+    }
+
+    #save() {
+        if (browser) localStorage.setItem('clearsky_dashboard_data', JSON.stringify(this.#data));
+    }
+
+    #generateUid(prefix: string) {
+        return `${prefix}_${Math.random().toString(36).substring(2, 11)}_${Date.now()}`;
+    }
+
+    /**
+     * CORE REFACTOR: Strictly following the "Deterministic Control + AI Enrichment" pipeline.
+     */
+    addSimulationResult(rawEvent: any, extraction: any) {
+        const runId = this.#generateUid('run');
+
+        // --- STEP 1: EVENT INTAKE & AI ENRICHMENT ---
+        // AI does not make decisions; it only extracts data context.
+        const event = {
+            id: runId,
+            original_event_id: rawEvent.event_id,
+            provider_id: rawEvent.provider,
+            event_type: rawEvent.event_type,
+            unstructured_text: rawEvent.unstructured_text,
+            occurred_at: new Date().toISOString(),
+            handoff_eligible: true // Determined by intake rules, not AI.
+        };
+
+        this.#data.events = [event, ...this.#data.events].slice(0, 20);
+        this.#data.enrichments[runId] = {
+            ...extraction,
+            id: this.#generateUid('enr'),
+            event_id: runId,
+            raw_text: rawEvent.unstructured_text
+        };
+
+        // --- STEP 2: SIGNAL EVALUATION (DETERMINISTIC RULES ENGINE) ---
+        // Rules look at the enriched event and decide if a Signal candidate fires.
+        const signals = this.#evaluateSignals(event, extraction);
+        this.#data.signals = [...signals, ...this.#data.signals];
+
+        // --- STEP 3: ORCHESTRATOR DECISION (DETERMINISTIC LOGIC) ---
+        // Orchestrator takes signals and maps them to strict Action Library IDs.
+        this.#runOrchestrator(signals, extraction);
+
+        this.#selectedEventId = runId;
+        this.#save();
+    }
+
+    #evaluateSignals(event: any, extraction: any) {
+        const signals: any[] = [];
+        const baseSignal = {
+            id: this.#generateUid('sig'),
+            event_id: event.id,
+            confidence: extraction.confidence_score,
+            created_at: new Date().toISOString()
+        };
+
+        // DETERMINISTIC RULE: Complaint presence always creates a Bottleneck signal.
+        if (extraction.complaint_topics?.length > 0) {
+            signals.push({ ...baseSignal, name: 'Communication Bottleneck', bucket: 'Bottleneck' });
+        }
+
+        // DETERMINISTIC RULE: High urgency sentiment creates a Risk signal.
+        if (extraction.urgency_level === 'high') {
+            signals.push({ ...baseSignal, name: 'Urgent Intervention Required', bucket: 'Risk' });
+        }
+
+        // DETERMINISTIC RULE: Intent to purchase creates an Opportunity signal.
+        if (extraction.intent?.toLowerCase().includes('quote') || extraction.intent?.toLowerCase().includes('price')) {
+            signals.push({ ...baseSignal, name: 'Conversion Opportunity', bucket: 'Opportunity' });
+        }
+
+        // Fallback for Momentum
+        if (signals.length === 0) {
+            signals.push({ ...baseSignal, name: 'Engagement Momentum', bucket: 'Momentum' });
+        }
+
+        return signals;
+    }
+
+    #runOrchestrator(signals: any[], extraction: any) {
+        for (const signal of signals) {
+            let actionId: ActionId | null = null;
+            let overrideMode: 'automatic' | 'approval_required' | null = null;
+
+            // ORCHESTRATOR LOGIC: Map Signals to strict Action Library
+            if (signal.bucket === 'Bottleneck') {
+                actionId = 'ACT-REV-001'; // Review Response Draft
+                overrideMode = 'approval_required'; // Bottlenecks always require human review
+            } else if (signal.bucket === 'Risk') {
+                actionId = 'ACT-COM-002'; // Urgent Notification
+                overrideMode = 'automatic'; // Risks trigger alerts immediately
+            } else if (signal.bucket === 'Opportunity') {
+                actionId = 'ACT-CRM-003'; // Update CRM
+            } else {
+                actionId = 'ACT-SYS-004'; // System Health / Momentum
+            }
+
+            if (actionId) {
+                const actionMeta = ACTION_LIBRARY[actionId];
+                const action = {
+                    id: this.#generateUid('act'),
+                    action_id: actionId,
+                    title: actionMeta.title,
+                    owner: 'Orchestrator', // AI is not an owner.
+                    confidence: signal.confidence,
+                    execution_mode: overrideMode || actionMeta.default_mode,
+                    priority: actionMeta.base_priority,
+                    event_id: signal.event_id,
+                    status: 'queued'
+                };
+
+                this.#data.actionQueue = [action, ...this.#data.actionQueue].slice(0, 10);
+
+                // If mode is approval_required, also push to approvals list
+                if (action.execution_mode === 'approval_required') {
+                    this.#data.approvals = [{
+                        id: this.#generateUid('app'),
+                        type: action.title,
+                        content: extraction.summary,
+                        event_id: signal.event_id,
+                        status: 'pending',
+                        created_at: new Date().toISOString()
+                    }, ...this.#data.approvals].slice(0, 50);
+                }
+            }
+        }
+    }
+
+    clear() {
+        this.#data = { ...DEFAULT_DATA, events: [], actionQueue: [], enrichments: {}, approvals: [] };
+        this.#selectedEventId = null;
+        this.#activeBucket = null;
+        this.#save();
+    }
+}
+
+export const dashboardState = new DashboardState();
+
+
+========================================
+FILE: src/routes/ai-signals/+page.svelte
+========================================
+
+<script lang="ts">
+    import './dashboard.css';
+    import Sidebar from './components/Sidebar.svelte';
+    import TopBar from './components/TopBar.svelte';
+    import ProviderCard from './components/ProviderCard.svelte';
+    import EventVolumeCard from './components/EventVolumeCard.svelte';
+    import SignalsStatsCard from './components/SignalsStatsCard.svelte';
+    import GrowthMetricsCard from './components/GrowthMetricsCard.svelte';
+    import LiveFeedCard from './components/LiveFeedCard.svelte';
+    import EnrichmentCard from './components/EnrichmentCard.svelte';
+    import ActionQueueCard from './components/ActionQueueCard.svelte';
+    import ApprovalRequiredCard from './components/ApprovalRequiredCard.svelte';
+    import { dashboardState } from '$lib/clearsky/dashboard-state.svelte.ts';
+
+    // Using the global state directly
+    const dashboard = $derived(dashboardState.data);
+    const enrichment = $derived(dashboardState.currentEnrichment);
+    const selectedId = $derived(dashboardState.selectedEventId);
+    
+    // Filtered data based on active bucket
+    const filteredEvents = $derived(dashboardState.filteredEvents);
+    const filteredActions = $derived(dashboardState.filteredActions);
+</script>
+
+<svelte:head>
+    <title>ClearSky Dashboard · AI Signals</title>
+</svelte:head>
+
+<div class="dashboard-container">
+    <Sidebar />
+    
+    <div class="flex flex-col flex-1">
+        <TopBar />
+        
+        <main class="main-content">
+            <div class="grid-layout">
+                <!-- Top Row -->
+                <ProviderCard providers={dashboard.providers} />
+                <EventVolumeCard volume={12450} />
+                <SignalsStatsCard signals={dashboard.signals} />
+                <GrowthMetricsCard metrics={dashboard.metrics} />
+
+                <!-- Middle Row -->
+                <LiveFeedCard 
+                    events={filteredEvents} 
+                    {selectedId} 
+                    onSelect={(id) => dashboardState.selectEvent(id)} 
+                />
+                <EnrichmentCard {enrichment} />
+
+                <!-- Bottom Row -->
+                <ActionQueueCard 
+                    actions={filteredActions} 
+                    {selectedId}
+                    onSelect={(id) => dashboardState.selectEvent(id)}
+                />
+                <ApprovalRequiredCard approvals={dashboard.approvals} />
+            </div>
+
+            <div class="mt-8 flex justify-between items-center text-[10px] text-dash-text-muted">
+                <div class="flex gap-4 items-center">
+                    <span>© 2026 ClearSky Software.</span>
+                    <button 
+                        class="hover:text-red-500 transition-colors underline" 
+                        onclick={() => dashboardState.clear()}
+                    >
+                        Reset Local Data
+                    </button>
+                    <a href="/ai-signals/extract" class="bg-blue-600/20 text-blue-400 px-2 py-0.5 rounded border border-blue-600/30">Run Simulations</a>
+                </div>
+                <div class="flex gap-4">
+                    <a href="#" class="hover:text-white transition-colors">Documentation</a>
+                    <a href="#" class="hover:text-white transition-colors">API Status</a>
+                    <a href="#" class="hover:text-white transition-colors">Support</a>
+                </div>
+            </div>
+        </main>
+    </div>
+</div>
+
+<style>
+    :global(body) {
+        background-color: #0a0e14 !important;
+    }
+</style>
+
+
+========================================
+FILE: src/routes/ai-signals/dashboard.css
+========================================
+
+:root {
+    --dash-bg: #0a0e14;
+    --dash-card-bg: #121820;
+    --dash-border: #1e2530;
+    --dash-text: #e2e8f0;
+    --dash-text-muted: #94a3b8;
+    --dash-accent-green: #22c55e;
+    --dash-accent-orange: #f59e0b;
+    --dash-accent-blue: #3b82f6;
+    --dash-accent-red: #ef4444;
+}
+
+.dashboard-container {
+    background-color: var(--dash-bg);
+    color: var(--dash-text);
+    min-height: 100vh;
+    font-family: var(--font-inter);
+}
+
+.dash-card {
+    background-color: var(--dash-card-bg);
+    border: 1px solid var(--dash-border);
+    border-radius: 12px;
+    padding: 20px;
+}
+
+.dash-card-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 16px;
+}
+
+.dash-card-title {
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--dash-text);
+}
+
+.dash-card-subtitle {
+    font-size: 12px;
+    color: var(--dash-text-muted);
+}
+
+.sidebar {
+    width: 240px;
+    background-color: var(--dash-bg);
+    border-right: 1px solid var(--dash-border);
+    height: 100vh;
+    position: fixed;
+    left: 0;
+    top: 0;
+    padding: 20px;
+}
+
+.sidebar-item {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 10px 16px;
+    border-radius: 8px;
+    color: var(--dash-text-muted);
+    transition: all 0.2s;
+    margin-bottom: 4px;
+    font-size: 14px;
+}
+
+.sidebar-item.active {
+    background-color: #1e2530;
+    color: white;
+}
+
+.sidebar-item:hover {
+    background-color: #161c24;
+    color: white;
+}
+
+.top-bar {
+    height: 64px;
+    border-bottom: 1px solid var(--dash-border);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0 24px;
+    margin-left: 240px;
+}
+
+.main-content {
+    margin-left: 240px;
+    padding: 24px;
+}
+
+.grid-layout {
+    display: grid;
+    grid-template-columns: repeat(12, 1fr);
+    gap: 20px;
+}
+
+.provider-icon-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 12px;
+}
+
+.provider-icon-box {
+    background: #1a222c;
+    border: 1px solid var(--dash-border);
+    border-radius: 8px;
+    padding: 12px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 8px;
+    position: relative;
+}
+
+.status-indicator {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    position: absolute;
+    top: 8px;
+    right: 8px;
+}
+
+.status-active { background-color: var(--dash-accent-green); }
+
+.stat-box {
+    border-radius: 8px;
+    padding: 12px;
+    display: flex;
+    flex-direction: column;
+}
+
+.stat-value {
+    font-size: 24px;
+    font-weight: 700;
+}
+
+.stat-label {
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--dash-text-muted);
+}
+
+.feed-item {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 12px 0;
+    border-bottom: 1px solid #1e2530;
+}
+
+.feed-item:last-child {
+    border-bottom: none;
+}
+
+.badge {
+    padding: 2px 8px;
+    border-radius: 4px;
+    font-size: 10px;
+    font-weight: 600;
+}
+
+.badge-risk { background: rgba(239, 68, 68, 0.2); color: #ef4444; }
+.badge-opp { background: rgba(34, 197, 94, 0.2); color: #22c55e; }
+
+/* Custom Scrollbar */
+::-webkit-scrollbar {
+    width: 6px;
+}
+::-webkit-scrollbar-track {
+    background: transparent;
+}
+::-webkit-scrollbar-thumb {
+    background: #1e2530;
+    border-radius: 10px;
+}
+::-webkit-scrollbar-thumb:hover {
+    background: #2d3748;
+}
+
+
+========================================
+FILE: src/routes/ai-signals/extract/+page.svelte
+========================================
+<script lang="ts">
+	import { onMount } from 'svelte';
+
+	const PROVIDERS = [
+		'clearsky_website_forms',
+		'telnyx_voice',
+		'telnyx_sms',
+		'email_provider',
+		'google_business_profile',
+		'dataforseo',
+		'matomo_analytics',
+		'clearsky_viewroom',
+		'fotojobber',
+		'quote_systems',
+		'booking_systems',
+		'crms',
+		'social_media',
+		'competitor_intelligence',
+		'contentradar',
+		'system_health'
+	] as const;
+
+	type Provider = (typeof PROVIDERS)[number];
+
+	type MockSignal = {
+		id: string;
+		name: string;
+		provider: Provider;
+		event_type: string;
+		unstructured_text: string;
+	};
+
+	const MOCK_SIGNALS: MockSignal[] = [
+		{
+			id: 'gbp_review_4star_minor_complaint',
+			name: 'GBP Review: 4★, minor communication complaint',
+			provider: 'google_business_profile',
+			event_type: 'review_received',
+			unstructured_text:
+				'Great work on our roof repair. The crew was professional and the job looks good. Only reason I am giving 4 stars is because communication before the appointment was a little slow.'
+		},
+		{
+			id: 'telnyx_sms_quote_request',
+			name: 'Telnyx SMS: quote request + timeline',
+			provider: 'telnyx_sms',
+			event_type: 'sms_received',
+			unstructured_text:
+				"Hey — can I get a quote for a new water heater? Ours started leaking today. I'd love someone out this week if possible."
+		},
+		{
+			id: 'telnyx_voice_voicemail_urgent',
+			name: 'Telnyx Voice: urgent voicemail (water in basement)',
+			provider: 'telnyx_voice',
+			event_type: 'voicemail_transcribed',
+			unstructured_text:
+				"Hi, I'm calling because our basement is taking on water and I think the sump pump died. We need help ASAP — please call me back."
+		},
+		{
+			id: 'system_health_alert',
+			name: 'System Health: alert-like text',
+			provider: 'system_health',
+			event_type: 'alert_triggered',
+			unstructured_text:
+				'DB connection pool saturation hit 95% for 7 minutes. API latency increased. Error rate 3.2%. Investigation needed.'
+		}
+	];
+
+	type UiState = {
+		selected_mock_id: string;
+		loading: boolean;
+		http_status: number | null;
+		response_json: unknown | null;
+		error: string | null;
+	};
+
+	type ExtractionResult = {
+		intent: string;
+		service_requested: string;
+		problem_type: string;
+		urgency_level: 'low' | 'medium' | 'high';
+		timeline: string;
+		sentiment: 'positive' | 'neutral' | 'negative';
+		praise_topics: string[];
+		complaint_topics: string[];
+		summary: string;
+		confidence_score: number;
+	};
+
+	let form = $state({
+		event_id: '',
+		provider: MOCK_SIGNALS[0].provider as Provider,
+		event_type: MOCK_SIGNALS[0].event_type,
+		unstructured_text: MOCK_SIGNALS[0].unstructured_text
+	});
+
+	let ui: UiState = $state({
+		selected_mock_id: MOCK_SIGNALS[0].id,
+		loading: false,
+		http_status: null,
+		response_json: null,
+		error: null
+	});
+
+	const selectedMock = $derived(MOCK_SIGNALS.find((m) => m.id === ui.selected_mock_id) ?? MOCK_SIGNALS[0]);
+
+	const extraction = $derived.by(() => {
+		const value = ui.response_json as any;
+		if (value?.success && value?.extraction) return value.extraction as ExtractionResult;
+		return null;
+	});
+
+	const lastRunLabel = $derived.by(() => {
+		if (ui.loading) return 'Running';
+		if (ui.http_status === null) return 'Idle';
+		if (ui.http_status >= 200 && ui.http_status < 300) return ui.http_status === 202 ? 'Accepted (no AI)' : 'Success';
+		return 'Client error';
+	});
+
+	function regenerateEventId() {
+		form.event_id = globalThis.crypto?.randomUUID?.() ?? `${Date.now()}-${Math.random()}`;
+	}
+
+	function loadMock(mockId: string) {
+		const mock = MOCK_SIGNALS.find((m) => m.id === mockId);
+		if (!mock) return;
+
+		ui.selected_mock_id = mock.id;
+		form.provider = mock.provider;
+		form.event_type = mock.event_type;
+		form.unstructured_text = mock.unstructured_text;
+
+		if (!form.event_id) regenerateEventId();
+	}
+
+	function clearOutput() {
+		ui.http_status = null;
+		ui.response_json = null;
+		ui.error = null;
+	}
+
+	import { dashboardState } from '$lib/clearsky/dashboard-state.svelte.ts';
+
+	async function submit() {
+		ui.loading = true;
+		ui.error = null;
+		ui.http_status = null;
+		ui.response_json = null;
+
+		try {
+			const res = await fetch('/api/ai-signals/extract', {
+				method: 'POST',
+				headers: { 'Content-Type': 'application/json' },
+				body: JSON.stringify({
+					event_id: form.event_id,
+					provider: form.provider,
+					event_type: form.event_type,
+					unstructured_text: form.unstructured_text
+				})
+			});
+
+			ui.http_status = res.status;
+			const json = await res.json().catch(() => null);
+			ui.response_json = json;
+
+			// Save to dashboard state if successful
+			if (json?.success && json?.extraction) {
+				dashboardState.addSimulationResult(
+					{
+						event_id: form.event_id,
+						provider: form.provider,
+						event_type: form.event_type,
+						unstructured_text: form.unstructured_text
+					},
+					json.extraction
+				);
+			}
+		} catch (err) {
+			ui.error = err instanceof Error ? err.message : String(err);
+		} finally {
+			ui.loading = false;
+		}
+	}
+
+	onMount(() => {
+		regenerateEventId();
+	});
+</script>
+
+<svelte:head>
+	<title>AI Signals · Extract</title>
+</svelte:head>
+
+<div class="mx-auto min-h-screen w-full max-w-6xl px-4 py-10">
+	<div class="glass rounded-3xl p-6">
+		<div class="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+			<div>
+				<h1 class="text-text-dark text-2xl font-bold">AI Signals — Extraction Dashboard</h1>
+				<p class="mt-2 max-w-3xl text-sm text-text-body">
+					Pick an incoming signal, review the payload, then run extraction. If OpenAI fails or times out, you’ll get
+					<strong>202 Accepted</strong> and the deterministic pipeline should continue without AI context.
+				</p>
+			</div>
+
+			<div class="flex flex-wrap gap-2">
+				<div class="rounded-full border border-slate-200 bg-slate-50 px-3 py-1 text-xs">
+					Last run: {lastRunLabel}
+				</div>
+				<div class="rounded-full border border-slate-200 bg-slate-50 px-3 py-1 text-xs">
+					Signals: {MOCK_SIGNALS.length}
+				</div>
+				{#if extraction}
+					<div class="rounded-full border border-slate-200 bg-slate-50 px-3 py-1 text-xs">
+						Confidence: {(extraction.confidence_score * 100).toFixed(0)}%
+					</div>
+				{/if}
+			</div>
+		</div>
+	</div>
+
+	<div class="mt-6 grid grid-cols-1 gap-6 lg:grid-cols-12">
+		<!-- Incoming signals (simple, obvious selection) -->
+		<section class="glass rounded-3xl p-6 lg:col-span-4">
+			<div class="flex items-center justify-between">
+				<h2 class="text-sm font-bold text-text-dark">Incoming signals</h2>
+				<div class="text-xs text-text-body">Mock data</div>
+			</div>
+
+			<div class="mt-4 flex flex-col gap-3">
+				{#each MOCK_SIGNALS as sig (sig.id)}
+					<button
+						type="button"
+						onclick={() => loadMock(sig.id)}
+						class={`w-full rounded-2xl border p-4 text-left transition-colors ${sig.id === ui.selected_mock_id ? 'border-brand-orange bg-white' : 'border-slate-200 bg-white hover:border-slate-300'}`}
+					>
+						<div class="flex items-start justify-between gap-3">
+							<div class="min-w-0">
+								<div class="truncate text-sm font-semibold text-text-dark">{sig.name}</div>
+								<div class="mt-1 flex flex-wrap gap-2">
+									<span class="rounded-full border border-slate-200 bg-slate-50 px-2 py-0.5 text-[11px]">
+										{sig.provider}
+									</span>
+									<span class="rounded-full border border-slate-200 bg-slate-50 px-2 py-0.5 text-[11px]">
+										{sig.event_type}
+									</span>
+								</div>
+							</div>
+							<div class="shrink-0 rounded-full border border-slate-200 bg-slate-50 px-2 py-0.5 text-[11px]">
+								Select
+							</div>
+						</div>
+						<div class="mt-3 line-clamp-3 text-xs text-text-body">
+							{sig.unstructured_text}
+						</div>
+					</button>
+				{/each}
+			</div>
+		</section>
+
+		<!-- Payload panel -->
+		<section class="glass rounded-3xl p-6 lg:col-span-4">
+			<h2 class="text-sm font-bold text-text-dark">1) Payload to extract</h2>
+			<p class="mt-2 text-xs text-text-body">
+				These fields are validated with Zod and sent to <code>/api/ai-signals/extract</code>.
+			</p>
+
+			<div class="mt-4 flex flex-wrap gap-2">
+				<button type="button" class="btn-outline" onclick={() => regenerateEventId()}>
+					New event_id
+				</button>
+				<button type="button" class="btn-outline" onclick={clearOutput} disabled={ui.loading}>
+					Clear output
+				</button>
+				<button type="button" class="btn-primary" disabled={ui.loading} onclick={submit}>
+					{ui.loading ? 'Extracting…' : '2) Run extraction'}
+				</button>
+			</div>
+
+			<div class="mt-5 grid grid-cols-1 gap-4">
+				<div>
+					<label for="event_id" class="text-xs font-semibold text-text-dark">event_id</label>
+					<input
+						id="event_id"
+						class="mt-2 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 font-mono text-xs"
+						bind:value={form.event_id}
+						placeholder="UUID"
+					/>
+				</div>
+
+				<div>
+					<label for="provider" class="text-xs font-semibold text-text-dark">provider</label>
+					<select
+						id="provider"
+						class="mt-2 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm"
+						bind:value={form.provider}
+					>
+						{#each PROVIDERS as p (p)}
+							<option value={p}>{p}</option>
+						{/each}
+					</select>
+				</div>
+
+				<div>
+					<label for="event_type" class="text-xs font-semibold text-text-dark">event_type</label>
+					<input
+						id="event_type"
+						class="mt-2 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm"
+						bind:value={form.event_type}
+						placeholder={selectedMock.event_type}
+					/>
+				</div>
+
+				<div>
+					<label for="unstructured_text" class="text-xs font-semibold text-text-dark">unstructured_text</label>
+					<textarea
+						id="unstructured_text"
+						class="mt-2 min-h-[220px] w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm"
+						bind:value={form.unstructured_text}
+						placeholder="Paste review / SMS / transcript…"
+					></textarea>
+				</div>
+			</div>
+		</section>
+
+		<!-- Results panel -->
+		<section class="glass rounded-3xl p-6 lg:col-span-4">
+			<h2 class="text-sm font-bold text-text-dark">3) Results</h2>
+			<p class="mt-2 text-xs text-text-body">
+				This shows the extracted fields (when available) plus the raw JSON for deterministic debugging.
+			</p>
+
+			{#if ui.error}
+				<div class="mt-4 rounded-2xl border border-slate-200 bg-white p-4">
+					<div class="text-sm font-semibold text-text-dark">Client error</div>
+					<div class="mt-1 font-mono text-xs text-text-body">{ui.error}</div>
+				</div>
+			{/if}
+
+			{#if extraction}
+				<div class="mt-4 rounded-2xl border border-slate-200 bg-white p-4">
+					<div class="flex flex-wrap gap-2">
+						<div class="rounded-full border border-slate-200 bg-slate-50 px-3 py-1 text-xs">
+							Sentiment: {extraction.sentiment}
+						</div>
+						<div class="rounded-full border border-slate-200 bg-slate-50 px-3 py-1 text-xs">
+							Urgency: {extraction.urgency_level}
+						</div>
+						<div class="rounded-full border border-slate-200 bg-slate-50 px-3 py-1 text-xs">
+							Confidence: {(extraction.confidence_score * 100).toFixed(0)}%
+						</div>
+					</div>
+
+					<div class="mt-4">
+						<div class="text-xs font-semibold text-text-dark">Summary</div>
+						<div class="mt-1 text-sm text-text-body">{extraction.summary}</div>
+					</div>
+
+					<div class="mt-4 grid grid-cols-1 gap-3">
+						<div>
+							<div class="text-xs font-semibold text-text-dark">Intent</div>
+							<div class="mt-1 text-sm text-text-body">{extraction.intent || '—'}</div>
+						</div>
+						<div>
+							<div class="text-xs font-semibold text-text-dark">Service requested</div>
+							<div class="mt-1 text-sm text-text-body">{extraction.service_requested || '—'}</div>
+						</div>
+						<div>
+							<div class="text-xs font-semibold text-text-dark">Problem type</div>
+							<div class="mt-1 text-sm text-text-body">{extraction.problem_type || '—'}</div>
+						</div>
+						<div>
+							<div class="text-xs font-semibold text-text-dark">Timeline</div>
+							<div class="mt-1 text-sm text-text-body">{extraction.timeline || '—'}</div>
+						</div>
+					</div>
+
+					<div class="mt-4 grid grid-cols-1 gap-3">
+						<div>
+							<div class="text-xs font-semibold text-text-dark">Praise topics</div>
+							<div class="mt-2 flex flex-wrap gap-2">
+								{#if extraction.praise_topics.length === 0}
+									<span class="text-xs text-text-body">—</span>
+								{:else}
+									{#each extraction.praise_topics as topic (topic)}
+										<span class="rounded-full border border-slate-200 bg-slate-50 px-2 py-0.5 text-[11px]">
+											{topic}
+										</span>
+									{/each}
+								{/if}
+							</div>
+						</div>
+
+						<div>
+							<div class="text-xs font-semibold text-text-dark">Complaint topics</div>
+							<div class="mt-2 flex flex-wrap gap-2">
+								{#if extraction.complaint_topics.length === 0}
+									<span class="text-xs text-text-body">—</span>
+								{:else}
+									{#each extraction.complaint_topics as topic (topic)}
+										<span class="rounded-full border border-slate-200 bg-slate-50 px-2 py-0.5 text-[11px]">
+											{topic}
+										</span>
+									{/each}
+								{/if}
+							</div>
+						</div>
+					</div>
+				</div>
+			{:else}
+				<div class="mt-4 rounded-2xl border border-slate-200 bg-white p-4">
+					<div class="text-sm font-semibold text-text-dark">No extraction yet</div>
+					<p class="mt-1 text-xs text-text-body">
+						Select a signal and click <strong>Run extraction</strong>.
+					</p>
+				</div>
+			{/if}
+
+			{#if ui.http_status !== null}
+				<div class="mt-4 rounded-2xl border border-slate-200 bg-white p-4">
+					<div class="flex items-center justify-between gap-4">
+						<div class="text-sm font-semibold text-text-dark">Raw response</div>
+						<div class="rounded-full border border-slate-200 bg-slate-50 px-3 py-1 text-xs">
+							HTTP {ui.http_status}
+						</div>
+					</div>
+
+					{#if ui.http_status === 202}
+						<p class="mt-2 text-xs text-text-body">
+							AI enrichment failed (timeout/key/etc.). Event can continue without AI context.
+						</p>
+					{/if}
+
+					<details class="mt-3">
+						<summary class="cursor-pointer text-xs font-semibold text-brand-blue">
+							Show JSON
+						</summary>
+						<pre class="mt-3 overflow-auto rounded-xl bg-slate-50 p-3 text-xs">{JSON.stringify(ui.response_json, null, 2)}</pre>
+					</details>
+				</div>
+			{/if}
+		</section>
+	</div>
+</div>
+
+
+========================================
+FILE: src/routes/ai-signals/components/ActionQueueCard.svelte
+========================================
+
+<script>
+    let { actions = [], selectedId, onSelect } = $props();
+</script>
+
+<div class="dash-card col-span-6">
+    <div class="dash-card-header border-b border-dash-border pb-3">
+        <div>
+            <h3 class="dash-card-title flex items-center gap-2">
+                Action Queue 
+                <span class="text-[9px] bg-blue-500/10 text-blue-400 px-1.5 py-0.5 rounded font-bold uppercase tracking-tight">Orchestrator Decision List</span>
+            </h3>
+            <p class="text-[10px] text-dash-text-muted mt-0.5">Deterministic rules-based execution</p>
+        </div>
+        <div class="flex gap-2">
+            <button class="w-6 h-6 rounded bg-white/5 flex items-center justify-center text-dash-text-muted hover:text-white transition-colors">
+                <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 4h13M3 8h9m-9 4h6m4 0l4-4m0 0l4 4m-4-4v12" /></svg>
+            </button>
+        </div>
+    </div>
+
+    {#if actions.length > 0}
+    <div class="mt-4 overflow-x-auto custom-scrollbar">
+        <table class="w-full text-left text-[11px]">
+            <thead>
+                <tr class="text-dash-text-muted uppercase text-[9px] tracking-widest font-bold">
+                    <th class="pb-3 px-2">Action ID</th>
+                    <th class="pb-3 px-2">Recommendation</th>
+                    <th class="pb-3 px-2">Owner</th>
+                    <th class="pb-3 px-2 text-right">Priority</th>
+                    <th class="pb-3 px-2 text-right">Execution</th>
+                </tr>
+            </thead>
+            <tbody class="divide-y divide-dash-border/30">
+                {#each actions as action (action.id)}
+                    <tr 
+                        class="group hover:bg-white/[0.02] transition-all cursor-pointer {selectedId === action.event_id ? 'bg-blue-600/5' : ''}"
+                        onclick={() => onSelect(action.event_id)}
+                    >
+                        <td class="py-4 px-2 font-mono text-[9px] {selectedId === action.event_id ? 'text-blue-400 font-bold' : 'text-blue-400/70'}">
+                            {action.action_id || 'ACT-GEN-001'}
+                        </td>
+                        <td class="py-4 px-2">
+                            <div class="font-semibold transition-colors {selectedId === action.event_id ? 'text-blue-400' : 'text-white group-hover:text-blue-400'}">{action.title}</div>
+                            <div class="text-[9px] text-dash-text-muted mt-1 font-mono uppercase">Decided by deterministic rule</div>
+                        </td>
+                        <td class="py-4 px-2">
+                            <div class="flex items-center gap-2">
+                                <div class="w-5 h-5 {selectedId === action.event_id ? 'bg-blue-600/40 border-blue-400' : 'bg-blue-600/20 border-blue-600/30'} border rounded flex items-center justify-center text-[8px] font-bold text-blue-400">SYS</div>
+                                <span class="text-[10px] text-dash-text-muted">{action.owner}</span>
+                            </div>
+                        </td>
+                        <td class="py-4 px-2 text-right">
+                            <span class="font-bold {action.priority === 1 ? 'text-orange-500' : 'text-white/60'}">P{action.priority}</span>
+                        </td>
+                        <td class="py-4 px-2 text-right">
+                            <span class="bg-dash-bg border border-dash-border px-2 py-1 rounded-[4px] text-[9px] font-mono {action.execution_mode === 'approval_required' ? 'text-orange-400 border-orange-500/20' : 'text-dash-text-muted'}">
+                                {action.execution_mode === 'approval_required' ? 'M. Override' : 'Auto-API'}
+                            </span>
+                        </td>
+                    </tr>
+                {/each}
+            </tbody>
+        </table>
+    </div>
+    {:else}
+    <div class="flex flex-col items-center justify-center h-48 text-dash-text-muted bg-white/[0.02] border border-dashed border-dash-border rounded-xl mt-4">
+        <svg class="w-10 h-10 mb-2 opacity-10" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
+        </svg>
+        <p class="text-xs font-medium">Orchestrator idle. No rules triggered.</p>
+    </div>
+    {/if}
+</div>
+
+
+========================================
+FILE: src/routes/ai-signals/components/ApprovalRequiredCard.svelte
+========================================
+
+<script>
+    let { approvals = [] } = $props();
+    let currentIndex = $state(0);
+
+    // Keep index in bounds when list changes
+    $effect(() => {
+        if (currentIndex >= approvals.length) {
+            currentIndex = Math.max(0, approvals.length - 1);
+        }
+    });
+
+    const currentApproval = $derived(approvals[currentIndex]);
+
+    function next() {
+        if (currentIndex < approvals.length - 1) currentIndex++;
+    }
+
+    function prev() {
+        if (currentIndex > 0) currentIndex--;
+    }
+</script>
+
+<div class="dash-card col-span-6 h-full flex flex-col">
+    <div class="dash-card-header mb-4">
+        <h3 class="dash-card-title flex items-center gap-2">
+            Approvals Pending
+            {#if approvals.length > 0}
+                <span class="w-2 h-2 rounded-full bg-orange-500 animate-pulse"></span>
+            {/if}
+        </h3>
+        <div class="flex items-center gap-4">
+            {#if approvals.length > 1}
+                <div class="flex items-center gap-2 bg-white/5 px-2 py-1 rounded border border-dash-border">
+                    <button 
+                        class="text-dash-text-muted hover:text-white disabled:opacity-20 disabled:pointer-events-none transition-colors"
+                        onclick={prev}
+                        disabled={currentIndex === 0}
+                    >
+                        <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7" /></svg>
+                    </button>
+                    <span class="text-[9px] font-bold text-white min-w-[30px] text-center">
+                        {currentIndex + 1} / {approvals.length}
+                    </span>
+                    <button 
+                        class="text-dash-text-muted hover:text-white disabled:opacity-20 disabled:pointer-events-none transition-colors"
+                        onclick={next}
+                        disabled={currentIndex === approvals.length - 1}
+                    >
+                        <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" /></svg>
+                    </button>
+                </div>
+            {/if}
+            <span class="text-[9px] text-dash-text-muted font-bold uppercase tracking-widest hidden sm:block">Manual Override Required</span>
+        </div>
+    </div>
+
+    <div class="flex-1">
+        {#if currentApproval}
+        <div class="bg-[#0d131a] rounded-xl border border-dash-border p-5 h-full flex flex-col shadow-inner">
+            <div class="flex items-start justify-between mb-5">
+                <div class="flex gap-3">
+                    <div class="w-8 h-8 bg-blue-600/10 border border-blue-600/20 rounded-lg flex items-center justify-center text-blue-500">
+                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z" />
+                        </svg>
+                    </div>
+                    <div>
+                        <div class="text-[12px] font-bold text-white mb-0.5">{currentApproval.type || 'Draft Proposal'}</div>
+                        <div class="text-[9px] text-dash-text-muted font-mono uppercase">Reference: {currentApproval.id?.slice(0, 8)}</div>
+                    </div>
+                </div>
+                <button class="text-dash-text-muted hover:text-white transition-colors">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M12 5v.01M12 12v.01M12 19v.01M12 6a1 1 0 110-2 1 1 0 010 2zm0 7a1 1 0 110-2 1 1 0 010 2zm0 7a1 1 0 110-2 1 1 0 010 2z" /></svg>
+                </button>
+            </div>
+
+            <div class="flex-1 overflow-y-auto custom-scrollbar mb-6">
+                <div class="bg-black/20 p-4 rounded-lg border border-white/5 relative">
+                    <p class="text-[11px] text-dash-text-muted leading-relaxed font-medium">
+                        {currentApproval.content}
+                    </p>
+                </div>
+            </div>
+
+            <div class="flex justify-end gap-3 pt-4 border-t border-dash-border/30">
+                <button class="bg-white/5 border border-dash-border px-4 py-2 rounded-lg text-[10px] font-bold text-white hover:bg-white/10 transition-all uppercase tracking-wider">Edit Draft</button>
+                <button class="bg-red-500/10 text-red-500 border border-red-500/20 px-4 py-2 rounded-lg text-[10px] font-bold hover:bg-red-500/20 transition-all uppercase tracking-wider">Discard</button>
+                <button class="bg-blue-600 px-5 py-2 rounded-lg text-[10px] font-bold text-white shadow-lg shadow-blue-600/20 hover:bg-blue-500 hover:scale-[1.02] active:scale-[0.98] transition-all uppercase tracking-wider">Approve & Send</button>
+            </div>
+        </div>
+        {:else}
+        <div class="flex flex-col items-center justify-center h-full min-h-[250px] text-dash-text-muted border border-dashed border-dash-border rounded-xl bg-white/[0.01]">
+            <div class="w-12 h-12 rounded-full bg-green-500/10 flex items-center justify-center mb-4">
+                <svg class="w-6 h-6 text-green-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
+                </svg>
+            </div>
+            <p class="text-xs font-bold uppercase tracking-widest opacity-60">System Synchronized</p>
+            <p class="text-[10px] mt-1 opacity-40">No pending manual approvals detected.</p>
+        </div>
+        {/if}
+    </div>
+</div>
+
+
+========================================
+FILE: src/routes/ai-signals/components/EnrichmentCard.svelte
+========================================
+
+<script>
+    let { enrichment } = $props();
+    let showFullRaw = $state(false);
+    let showFullAI = $state(false);
+
+    // Fallback for sentiment score if it's not explicitly provided
+    const displayScore = $derived(enrichment?.sentiment_score || enrichment?.confidence_score || 0);
+</script>
+
+<div class="dash-card col-span-6 relative overflow-hidden group min-h-[300px]">
+    <div class="dash-card-header border-b border-dash-border/30 pb-3">
+        <div>
+            <h3 class="dash-card-title flex items-center gap-2">
+                <svg class="w-4 h-4 text-blue-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z" />
+                </svg>
+                Intelligence Enrichment
+            </h3>
+            <p class="text-[10px] text-dash-text-muted font-medium uppercase tracking-tight">AI Extraction Context (Context Only)</p>
+            <p class="text-[8px] text-blue-500/50 uppercase tracking-tighter mt-0.5">Note: AI cannot trigger actions. Orchestrator rules handle decisions.</p>
+        </div>
+        <div class="flex items-center gap-2">
+            <span class="text-[9px] font-bold text-green-500 bg-green-500/10 px-2 py-0.5 rounded border border-green-500/20">Active Analysis</span>
+        </div>
+    </div>
+
+    {#if enrichment}
+    <div class="flex flex-col lg:flex-row gap-6 mt-4 relative z-10">
+        <!-- Original Source -->
+        <div class="lg:w-1/2 flex flex-col gap-3">
+            <div class="flex items-center justify-between">
+                <span class="text-[10px] font-bold text-white/50 uppercase tracking-widest">Original Source</span>
+                <button class="text-[9px] text-blue-400 hover:underline" onclick={() => showFullRaw = !showFullRaw}>
+                    {showFullRaw ? 'Collapse' : 'Show Full'}
+                </button>
+            </div>
+            <div class="bg-black/20 rounded-xl p-4 border border-dash-border shadow-inner group/raw relative transition-all duration-300 {showFullRaw ? 'max-h-none' : 'max-h-32'}">
+                <p class="text-[11px] text-dash-text-muted leading-relaxed {showFullRaw ? '' : 'line-clamp-4'}">
+                    "{enrichment.raw_text || 'No source text available.'}"
+                </p>
+                {#if !showFullRaw && enrichment.raw_text?.length > 150}
+                    <div class="absolute bottom-0 left-0 right-0 h-10 bg-gradient-to-t from-[#0d131a] to-transparent rounded-b-xl"></div>
+                {/if}
+            </div>
+
+            <div class="mt-auto">
+                <div class="flex justify-between items-center mb-1.5">
+                    <span class="text-[10px] font-bold text-white/70">Extraction Accuracy</span>
+                    <span class="text-[10px] font-mono text-green-400">{Math.round((enrichment.confidence_score || 0) * 100)}%</span>
+                </div>
+                <div class="w-full bg-dash-bg h-1 rounded-full overflow-hidden">
+                    <div class="bg-green-500 h-full transition-all duration-1000 shadow-[0_0_8px_rgba(34,197,94,0.4)]" style="width: {(enrichment.confidence_score || 0) * 100}%"></div>
+                </div>
+            </div>
+        </div>
+
+        <!-- AI Insight -->
+        <div class="lg:w-1/2 flex flex-col gap-3">
+            <div class="flex items-center justify-between">
+                <span class="text-[10px] font-bold text-blue-400 uppercase tracking-widest">AI Context Summary</span>
+                <button class="text-[9px] text-blue-400 hover:underline" onclick={() => showFullAI = !showFullAI}>
+                    {showFullAI ? 'Collapse' : 'Show Full'}
+                </button>
+            </div>
+            <div class="bg-blue-600/[0.03] rounded-xl p-4 border border-blue-500/20 relative transition-all duration-300 {showFullAI ? 'max-h-none' : 'max-h-32'}">
+                <p class="text-[11px] text-white/90 leading-relaxed {showFullAI ? '' : 'line-clamp-4'} font-medium">
+                    {enrichment.summary || enrichment.urgency_reason || 'AI analysis complete. Awaiting context...'}
+                </p>
+                {#if !showFullAI && (enrichment.summary?.length > 150 || enrichment.urgency_reason?.length > 150)}
+                    <div class="absolute bottom-0 left-0 right-0 h-10 bg-gradient-to-t from-[#0d131a] to-transparent rounded-b-xl"></div>
+                {/if}
+            </div>
+
+            <div class="grid grid-cols-2 gap-2 mt-2">
+                <div class="bg-white/5 rounded-lg p-2 border border-dash-border">
+                    <span class="text-[8px] text-dash-text-muted uppercase font-bold tracking-tighter">Sentiment</span>
+                    <div class="text-[10px] text-white font-bold">{enrichment.sentiment || 'neutral'} ({Math.round(displayScore * 100)}%)</div>
+                </div>
+                <div class="bg-white/5 rounded-lg p-2 border border-dash-border">
+                    <span class="text-[8px] text-dash-text-muted uppercase font-bold tracking-tighter">Intent</span>
+                    <div class="text-[10px] text-white font-bold truncate">{enrichment.intent || 'Unknown'}</div>
+                </div>
+            </div>
+            
+            <div class="mt-1">
+                <div class="inline-flex items-center gap-2 px-3 py-1.5 rounded-lg bg-orange-500/10 border border-orange-500/20">
+                    <div class="w-1.5 h-1.5 rounded-full bg-orange-500 animate-pulse"></div>
+                    <span class="text-[10px] font-bold text-orange-400 uppercase tracking-tight">Priority Level: {enrichment.urgency_level || 'medium'}</span>
+                </div>
+            </div>
+        </div>
+    </div>
+    {:else}
+    <div class="flex flex-col items-center justify-center h-48 bg-white/[0.02] border border-dashed border-dash-border rounded-xl mt-4">
+        <div class="w-12 h-12 rounded-full border border-dash-border flex items-center justify-center mb-3">
+            <svg class="w-6 h-6 text-dash-text-muted opacity-20" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.989-2.386l-.548-.547z" />
+            </svg>
+        </div>
+        <p class="text-[11px] text-dash-text-muted font-medium uppercase tracking-widest">Awaiting Simulation Engine</p>
+    </div>
+    {/if}
+
+    <!-- Background decoration -->
+    <div class="absolute -bottom-10 -right-10 w-40 h-40 bg-blue-600/5 blur-3xl pointer-events-none"></div>
+</div>
+
+
+========================================
+FILE: src/routes/ai-signals/components/EventVolumeCard.svelte
+========================================
+
+<script>
+    let { volume = 12450 } = $props();
+</script>
+
+<div class="dash-card col-span-3">
+    <div class="dash-card-header">
+        <div>
+            <h3 class="dash-card-title">Total Event Volume <span class="text-dash-text-muted font-normal">(Last 24h)</span></h3>
+        </div>
+        <button class="text-dash-text-muted hover:text-white transition-colors">
+            <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 20 20"><path d="M10 6a2 2 0 110-4 2 2 0 010 4zM10 12a2 2 0 110-4 2 2 0 010 4zM10 18a2 2 0 110-4 2 2 0 010 4z" /></svg>
+        </button>
+    </div>
+
+    <div class="mt-2">
+        <div class="text-3xl font-bold">{volume.toLocaleString()}</div>
+        
+        <div class="mt-4 h-24 relative overflow-hidden">
+            <svg class="w-full h-full" viewBox="0 0 400 100" preserveAspectRatio="none">
+                <defs>
+                    <linearGradient id="chartGradient" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="0%" stop-color="#3b82f6" stop-opacity="0.4" />
+                        <stop offset="100%" stop-color="#3b82f6" stop-opacity="0" />
+                    </linearGradient>
+                </defs>
+                <path d="M0,80 Q50,20 100,60 T200,40 T300,70 T400,30 L400,100 L0,100 Z" fill="url(#chartGradient)" />
+                <path d="M0,80 Q50,20 100,60 T200,40 T300,70 T400,30" stroke="#3b82f6" stroke-width="2" fill="none" />
+            </svg>
+        </div>
+    </div>
+</div>
+
+
+========================================
+FILE: src/routes/ai-signals/components/GrowthMetricsCard.svelte
+========================================
+
+<script>
+    let { metrics = {} } = $props();
+</script>
+
+<div class="dash-card col-span-3">
+    <div class="dash-card-header">
+        <h3 class="dash-card-title">Growth Metrics</h3>
+        <button class="text-dash-text-muted hover:text-white transition-colors">
+            <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 20 20"><path d="M10 6a2 2 0 110-4 2 2 0 010 4zM10 12a2 2 0 110-4 2 2 0 010 4zM10 18a2 2 0 110-4 2 2 0 010 4z" /></svg>
+        </button>
+    </div>
+
+    <div class="grid grid-cols-3 gap-4">
+        <div>
+            <div class="text-[10px] text-dash-text-muted mb-1">Revenue Growth</div>
+            <div class="text-xl font-bold text-green-500">+{metrics.revenue_growth || 18}%</div>
+        </div>
+        <div>
+            <div class="text-[10px] text-dash-text-muted mb-1">Booked Work</div>
+            <div class="text-xl font-bold text-green-500">+{metrics.booked_work || 22}%</div>
+        </div>
+        <div>
+            <div class="text-[10px] text-dash-text-muted mb-1">Reputation Score</div>
+            <div class="flex items-center gap-1">
+                <span class="text-xl font-bold text-white">{metrics.reputation_score || 4.8}</span>
+                <svg class="w-3 h-3 text-orange-500 fill-current" viewBox="0 0 20 20"><path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" /></svg>
+            </div>
+            <div class="text-[8px] text-dash-text-muted">stars on GBP</div>
+        </div>
+    </div>
+
+    <div class="mt-4 h-12 relative">
+        <svg class="w-full h-full" viewBox="0 0 300 40" preserveAspectRatio="none">
+            <path d="M0,35 Q50,10 100,30 T200,15 T300,25" stroke="#22c55e" stroke-width="2" fill="none" />
+            <path d="M0,35 Q50,30 100,35 T200,38 T300,32" stroke="#3b82f6" stroke-width="2" fill="none" opacity="0.5" />
+        </svg>
+    </div>
+</div>
+
+
+========================================
+FILE: src/routes/ai-signals/components/LiveFeedCard.svelte
+========================================
+
+<script>
+    let { events = [], selectedId, onSelect } = $props();
+    
+    function formatTime(iso) {
+        if (!iso) return 'Just now';
+        const date = new Date(iso);
+        return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    }
+</script>
+
+<div class="dash-card col-span-6">
+    <div class="dash-card-header">
+        <div>
+            <h3 class="dash-card-title">Event Feed</h3>
+            <p class="text-[10px] text-dash-text-muted italic mt-0.5">Normalized ClearSky stream</p>
+        </div>
+        <button class="text-dash-text-muted">
+            <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 20 20"><path d="M10 6a2 2 0 110-4 2 2 0 010 4zM10 12a2 2 0 110-4 2 2 0 010 4zM10 18a2 2 0 110-4 2 2 0 010 4z" /></svg>
+        </button>
+    </div>
+
+    {#if events.length > 0}
+    <div class="space-y-0.5 max-h-[220px] overflow-y-auto pr-2 custom-scrollbar">
+        {#each events as event (event.id)}
+            <button 
+                class="feed-item w-full text-left group hover:bg-white/5 px-2 rounded-lg transition-all border-none py-2.5 {selectedId === event.id ? 'bg-blue-600/10 ring-1 ring-blue-500/30' : ''}"
+                onclick={() => onSelect(event.id)}
+            >
+                <div class="flex items-center gap-3 w-[35%] overflow-hidden">
+                    <div class="w-2 h-2 rounded-full {selectedId === event.id ? 'bg-blue-400' : 'bg-blue-500/40'} shadow-[0_0_8px_rgba(59,130,246,0.5)] transition-colors"></div>
+                    <span class="truncate font-medium text-[11px] {selectedId === event.id ? 'text-blue-400' : 'text-white/90'}">{event.provider_id.replace(/_/g, ' ')}</span>
+                </div>
+                <div class="flex items-center gap-2 text-dash-text-muted w-[45%]">
+                    <svg class="w-3 h-3 opacity-50" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M13 7l5 5m0 0l-5 5m5-5H6" /></svg>
+                    <span class="text-[11px] font-mono {selectedId === event.id ? 'text-white' : 'text-blue-400/80'}">{event.event_type}</span>
+                </div>
+                <div class="text-right text-[10px] text-dash-text-muted w-[20%] font-medium">
+                    {formatTime(event.occurred_at)}
+                </div>
+            </button>
+        {/each}
+    </div>
+    {:else}
+    <div class="flex flex-col items-center justify-center h-48 border border-dashed border-dash-border rounded-xl bg-white/[0.02]">
+        <svg class="w-8 h-8 text-dash-text-muted mb-2 opacity-20" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M8.111 16.404a5.5 5.5 0 117.778 0M12 20h.01m-7.08-7.071c3.904-3.905 10.257-3.905 14.162 0M1.394 9.393c5.857-5.857 15.355-5.857 21.213 0" />
+        </svg>
+        <p class="text-xs text-dash-text-muted font-medium">Listening for incoming signals...</p>
+    </div>
+    {/if}
+</div>
+
+
+========================================
+FILE: src/routes/ai-signals/components/ProviderCard.svelte
+========================================
+
+<script>
+    let { providers = [] } = $props();
+    let isExpanded = $state(false);
+    
+    const icons = {
+        'telnyx': 'M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z',
+        'google': 'M21 12a9 9 0 01-9 9m9-9a9 9 0 00-9-9m9 9H3m9 9a9 9 0 01-9-9m9 9c1.657 0 3-4.03 3-9s-1.343-9-3-9m0 18c-1.657 0-3-4.03-3-9s1.343-9 3-9m-9 9h18',
+        'social': 'M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1',
+        'dataforseo': 'M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z',
+        'email': 'M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z',
+        'crm': 'M21 13.255A23.931 23.931 0 0112 15c-3.183 0-6.22-.62-9-1.745M16 6V4a2 2 0 00-2-2h-4a2 2 0 00-2 2v2m4 6h.01M5 20h14a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z'
+    };
+
+    function getIconPath(id) {
+        // Fallback for different ID formats
+        if (id.includes('telnyx')) return icons.telnyx;
+        if (id.includes('google')) return icons.google;
+        if (id.includes('social') || id.includes('analytics') || id.includes('clearsky')) return icons.social;
+        if (id.includes('dataforseo')) return icons.dataforseo;
+        if (id.includes('email')) return icons.email;
+        if (id.includes('crm') || id.includes('quote') || id.includes('booking')) return icons.crm;
+        return 'M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4';
+    }
+
+    function formatName(name) {
+        if (name.length > 15) return name.slice(0, 12) + '...';
+        return name;
+    }
+
+    const visibleProviders = $derived(isExpanded ? providers : providers.slice(0, 6));
+</script>
+
+<div class="dash-card col-span-3 flex flex-col">
+    <div class="dash-card-header mb-4">
+        <div>
+            <h3 class="dash-card-title flex items-center gap-2">
+                Providers 
+                <span class="text-[9px] bg-green-500/10 text-green-400 px-1.5 py-0.5 rounded font-bold uppercase tracking-tight">{providers.length} Active</span>
+            </h3>
+        </div>
+        <button 
+            class="text-dash-text-muted hover:text-white transition-all transform {isExpanded ? 'rotate-180' : ''}"
+            onclick={() => isExpanded = !isExpanded}
+        >
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" /></svg>
+        </button>
+    </div>
+
+    <div class="grid grid-cols-3 gap-2 overflow-hidden transition-all duration-500" style="max-height: {isExpanded ? '600px' : '180px'}">
+        {#each visibleProviders as provider (provider.id)}
+            <div class="provider-icon-box group hover:bg-[#1e2733] transition-colors cursor-pointer border border-dash-border bg-white/[0.02]">
+                <div class="status-indicator status-active"></div>
+                <div class="w-7 h-7 flex items-center justify-center text-dash-text-muted group-hover:text-blue-400 transition-colors">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d={getIconPath(provider.id)} />
+                    </svg>
+                </div>
+                <span class="text-[8px] font-bold text-center text-dash-text-muted group-hover:text-white transition-colors px-1 leading-tight uppercase tracking-tighter">
+                    {formatName(provider.name)}
+                </span>
+            </div>
+        {/each}
+
+        {#if !isExpanded && providers.length > 6}
+            <button 
+                class="provider-icon-box flex items-center justify-center bg-blue-600/10 border border-blue-600/30 hover:bg-blue-600/20 transition-all text-blue-400 font-bold text-[9px] uppercase tracking-widest"
+                onclick={() => isExpanded = true}
+            >
+                +{providers.length - 6} More
+            </button>
+        {/if}
+    </div>
+</div>
+
+
+========================================
+FILE: src/routes/ai-signals/components/Sidebar.svelte
+========================================
+
+<script>
+    import { dashboardState } from '$lib/clearsky/dashboard-state.svelte.ts';
+    
+    const menuItems = [
+        { id: 'main', label: 'Main Dashboard', icon: 'M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6', active: true },
+        { id: 'settings', label: 'Settings', icon: 'M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z' }
+    ];
+</script>
+
+<aside class="sidebar">
+    <div class="flex items-center gap-3 mb-10 px-4">
+        <div class="w-8 h-8 bg-blue-600 rounded-lg flex items-center justify-center shadow-lg shadow-blue-600/20">
+            <svg class="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z" />
+            </svg>
+        </div>
+        <span class="text-lg font-bold text-white tracking-tight">ClearSky</span>
+    </div>
+
+    <nav class="space-y-1">
+        {#each menuItems as item (item.id)}
+            <a href="javascript:void(0)" class="sidebar-item {item.active ? 'active' : ''}">
+                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d={item.icon} />
+                </svg>
+                <span class="font-medium">{item.label}</span>
+            </a>
+        {/each}
+    </nav>
+
+    <div class="absolute bottom-8 left-4 right-4">
+        <button 
+            class="sidebar-item w-full text-red-400 hover:text-red-300 hover:bg-red-400/5 transition-all"
+            onclick={() => dashboardState.clear()}
+        >
+            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+            </svg>
+            <span class="font-medium">Reset Data</span>
+        </button>
+    </div>
+</aside>
+
+
+========================================
+FILE: src/routes/ai-signals/components/SignalsStatsCard.svelte
+========================================
+
+<script>
+    import { dashboardState } from '$lib/clearsky/dashboard-state.svelte.ts';
+    let { signals = [] } = $props();
+
+    const bucketMeta = {
+        'Opportunity': { color: 'text-green-400', bg: 'bg-green-500/5', border: 'border-green-500/20', active: 'ring-1 ring-green-500/50 bg-green-500/10' },
+        'Risk': { color: 'text-orange-400', bg: 'bg-orange-500/5', border: 'border-orange-500/20', active: 'ring-1 ring-orange-500/50 bg-orange-500/10' },
+        'Bottleneck': { color: 'text-red-400', bg: 'bg-red-500/5', border: 'border-red-500/20', active: 'ring-1 ring-red-500/50 bg-red-500/10' },
+        'Performance': { color: 'text-blue-400', bg: 'bg-blue-500/5', border: 'border-blue-500/20', active: 'ring-1 ring-blue-500/50 bg-blue-500/10' },
+        'Competitive': { color: 'text-purple-400', bg: 'bg-purple-500/5', border: 'border-purple-500/20', active: 'ring-1 ring-purple-500/50 bg-purple-500/10' },
+        'Momentum': { color: 'text-slate-300', bg: 'bg-slate-500/5', border: 'border-slate-500/20', active: 'ring-1 ring-slate-400/50 bg-slate-500/10' }
+    };
+
+    const buckets = ['Opportunity', 'Risk', 'Bottleneck', 'Performance', 'Competitive', 'Momentum'];
+
+    const counts = $derived.by(() => {
+        return buckets.map(bucket => ({
+            label: bucket,
+            value: signals.filter(s => s.bucket === bucket).length,
+            ...bucketMeta[bucket]
+        }));
+    });
+
+    const activeBucket = $derived(dashboardState.activeBucket);
+</script>
+
+<div class="dash-card col-span-3">
+    <div class="dash-card-header mb-4">
+        <div>
+            <h3 class="dash-card-title">AI Signals Detected</h3>
+            <p class="text-[10px] text-dash-text-muted mt-0.5">Click a bucket to filter feed</p>
+        </div>
+        {#if activeBucket}
+            <button 
+                class="text-[9px] font-bold text-blue-400 hover:text-white uppercase tracking-tighter bg-blue-400/10 px-2 py-0.5 rounded border border-blue-400/20"
+                onclick={() => dashboardState.activeBucket = null}
+            >
+                Clear Filter
+            </button>
+        {:else}
+            <button class="text-dash-text-muted hover:text-white transition-colors">
+                <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 20 20"><path d="M10 6a2 2 0 110-4 2 2 0 010 4zM10 12a2 2 0 110-4 2 2 0 010 4zM10 18a2 2 0 110-4 2 2 0 010 4z" /></svg>
+            </button>
+        {/if}
+    </div>
+
+    <div class="grid grid-cols-2 sm:grid-cols-3 gap-2">
+        {#each counts as stat (stat.label)}
+            <button 
+                class="flex flex-col items-start p-3 rounded-xl border transition-all duration-200 text-left group
+                       {activeBucket === stat.label ? stat.active : `${stat.bg} ${stat.border} hover:border-white/20`}"
+                onclick={() => dashboardState.toggleBucket(stat.label)}
+            >
+                <span class="text-[9px] font-bold uppercase tracking-tight mb-1 transition-colors 
+                            {activeBucket === stat.label ? 'text-white' : 'text-dash-text-muted group-hover:text-white/70'}">
+                    {stat.label}
+                </span>
+                <span class="text-2xl font-bold font-mono leading-none {stat.color} transition-transform duration-300 {activeBucket === stat.label ? 'scale-110 translate-x-1' : ''}">
+                    {stat.value}
+                </span>
+            </button>
+        {/each}
+    </div>
+</div>
+
+
+========================================
+FILE: src/routes/ai-signals/components/TopBar.svelte
+========================================
+
+<script>
+    let { title = "ClearSky AI Decision System Dashboard" } = $props();
+</script>
+
+<header class="top-bar">
+    <h1 class="text-lg font-semibold text-white tracking-tight">{title}</h1>
+    
+    <div class="flex items-center gap-6">
+        <button class="text-dash-text-muted hover:text-white transition-colors">
+            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m0 0a2 2 0 002 2h2a2 2 0 002-2V5a2 2 0 00-2-2h-2a2 2 0 00-2 2v14" />
+            </svg>
+        </button>
+        <button class="relative text-dash-text-muted hover:text-white transition-colors">
+            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" />
+            </svg>
+            <span class="absolute top-0 right-0 w-2 h-2 bg-red-500 rounded-full border-2 border-[#0a0e14]"></span>
+        </button>
+        <div class="flex items-center gap-3 pl-4 border-l border-dash-border">
+            <div class="text-right hidden sm:block">
+                <div class="text-[11px] font-bold text-white leading-none">Alex Johnson</div>
+                <div class="text-[9px] text-dash-text-muted mt-1 uppercase tracking-wider font-bold">System Admin</div>
+            </div>
+            <div class="relative">
+                <img src="https://ui-avatars.com/api/?name=Alex+Johnson&background=3b82f6&color=fff" alt="Avatar" class="w-8 h-8 rounded-lg border border-dash-border shadow-lg" />
+                <div class="absolute -bottom-1 -right-1 w-2.5 h-2.5 bg-green-500 rounded-full border-2 border-[#0a0e14]"></div>
+            </div>
+        </div>
+    </div>
+</header>
+
+

@@ -1,0 +1,189 @@
+{
+	"info": {
+		"_postman_id": "c1f7b8e9-4d2b-4e8a-9c3f-7b5e1a2d3c4b",
+		"name": "ClearSky Google Review Webhooks",
+		"description": "Simulate Google Business Profile review webhooks for testing the complete 12-step ClearSky pipeline.",
+		"schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+	},
+	"item": [
+		{
+			"name": "Scenario 1: Positive 5-Star (Momentum + Testimonial)",
+			"request": {
+				"method": "POST",
+				"header": [
+					{
+						"key": "Content-Type",
+						"value": "application/json"
+					}
+				],
+				"body": {
+					"mode": "raw",
+					"raw": "{\n  \"provider\": \"google_business_profile\",\n  \"provider_event_name\": \"review.created\",\n  \"review_id\": \"gbp_review_pos_static_001\",\n  \"location_id\": \"gbp_location_1199\",\n  \"author_name\": \"John Doe\",\n  \"rating\": 5,\n  \"comment\": \"Absolutely incredible service! The team replaced my entire roof in two days. Cleaned up everything. Best contractor in Timmins.\",\n  \"created_time\": \"2024-05-08T12:00:00Z\"\n}"
+				},
+				"url": {
+					"raw": "{{baseUrl}}/api/signals/google/review",
+					"host": [
+						"{{baseUrl}}"
+					],
+					"path": [
+						"api",
+						"signals",
+						"google",
+						"review"
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "Scenario 2: Negative 1-Star (Emergency Leak - Risk)",
+			"request": {
+				"method": "POST",
+				"header": [
+					{
+						"key": "Content-Type",
+						"value": "application/json"
+					}
+				],
+				"body": {
+					"mode": "raw",
+					"raw": "{\n  \"provider\": \"google_business_profile\",\n  \"provider_event_name\": \"review.created\",\n  \"review_id\": \"gbp_review_neg_static_001\",\n  \"location_id\": \"gbp_location_1199\",\n  \"author_name\": \"Margaret T.\",\n  \"rating\": 1,\n  \"comment\": \"Emergency! My roof is leaking after the repair they did last week. I have called 5 times and no one answers. Water is coming into my kitchen right now!\",\n  \"created_time\": \"2024-05-08T13:00:00Z\"\n}"
+				},
+				"url": {
+					"raw": "{{baseUrl}}/api/signals/google/review",
+					"host": [
+						"{{baseUrl}}"
+					],
+					"path": [
+						"api",
+						"signals",
+						"google",
+						"review"
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "Scenario 3: Mixed 4-Star (Momentum + Bottleneck + Opportunity)",
+			"request": {
+				"method": "POST",
+				"header": [
+					{
+						"key": "Content-Type",
+						"value": "application/json"
+					}
+				],
+				"body": {
+					"mode": "raw",
+					"raw": "{\n  \"provider\": \"google_business_profile\",\n  \"provider_event_name\": \"review.created\",\n  \"review_id\": \"gbp_review_mixed_static_001\",\n  \"location_id\": \"gbp_location_1199\",\n  \"author_name\": \"Sarah M.\",\n  \"rating\": 4,\n  \"comment\": \"The crew was professional and the job looks good. Only reason I'm giving 4 stars is because communication before the appointment was a little slow.\",\n  \"created_time\": \"2024-05-08T14:00:00Z\"\n}"
+				},
+				"url": {
+					"raw": "{{baseUrl}}/api/signals/google/review",
+					"host": [
+						"{{baseUrl}}"
+					],
+					"path": [
+						"api",
+						"signals",
+						"google",
+						"review"
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "Scenario 4: Neutral 3-Star (Opportunity)",
+			"request": {
+				"method": "POST",
+				"header": [
+					{
+						"key": "Content-Type",
+						"value": "application/json"
+					}
+				],
+				"body": {
+					"mode": "raw",
+					"raw": "{\n  \"provider\": \"google_business_profile\",\n  \"provider_event_name\": \"review.created\",\n  \"review_id\": \"gbp_review_neutral_static_001\",\n  \"location_id\": \"gbp_location_1199\",\n  \"author_name\": \"Bob B.\",\n  \"rating\": 3,\n  \"comment\": \"Average experience. The roof was fixed but they left some shingles on my lawn. Took a few days to get a callback for the quote.\",\n  \"created_time\": \"2024-05-08T15:00:00Z\"\n}"
+				},
+				"url": {
+					"raw": "{{baseUrl}}/api/signals/google/review",
+					"host": [
+						"{{baseUrl}}"
+					],
+					"path": [
+						"api",
+						"signals",
+						"google",
+						"review"
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "Scenario 5: Parking Complaint (Ops/Brand Risk)",
+			"request": {
+				"method": "POST",
+				"header": [
+					{
+						"key": "Content-Type",
+						"value": "application/json"
+					}
+				],
+				"body": {
+					"mode": "raw",
+					"raw": "{\n  \"provider\": \"google_business_profile\",\n  \"provider_event_name\": \"review.created\",\n  \"review_id\": \"gbp_review_ops_static_001\",\n  \"location_id\": \"gbp_location_1199\",\n  \"author_name\": \"Alex P.\",\n  \"rating\": 2,\n  \"comment\": \"I am not even a customer. Your trucks blocked my driveway for 3 hours while you were working next door. Very inconsiderate drivers.\",\n  \"created_time\": \"2024-05-08T16:00:00Z\"\n}"
+				},
+				"url": {
+					"raw": "{{baseUrl}}/api/signals/google/review",
+					"host": [
+						"{{baseUrl}}"
+					],
+					"path": [
+						"api",
+						"signals",
+						"google",
+						"review"
+					]
+				}
+			},
+			"response": []
+		}
+	],
+	"event": [
+		{
+			"listen": "prerequest",
+			"script": {
+				"type": "text/javascript",
+				"exec": [
+					""
+				]
+			}
+		},
+		{
+			"listen": "test",
+			"script": {
+				"type": "text/javascript",
+				"exec": [
+					"pm.test(\"Status code is 200\", function () {",
+					"    pm.response.to.have.status(200);",
+					"});",
+					"",
+					"pm.test(\"Success is true\", function () {",
+					"    var jsonData = pm.response.json();",
+					"    pm.expect(jsonData.success).to.eql(true);",
+					"});"
+				]
+			}
+		}
+	],
+	"variable": [
+		{
+			"key": "baseUrl",
+			"value": "https://clearskysoftware.net",
+			"type": "string"
+		}
+	]
+}

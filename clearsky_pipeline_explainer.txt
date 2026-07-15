@@ -1,0 +1,162 @@
+CLEARSKY AI DECISION SYSTEM: AUDIT TRACE EXPLAINER
+Trace ID: trc_nqwcrh2
+Event: 1-Star Google Review from Margaret T.
+Business: Apex Contracting
+================================================================================
+
+[PHASE 1: EVENT INTAKE & NORMALIZATION]
+
+--- [PIPELINE START] Trace: trc_nqwcrh2 ---
+The system initializes a unique tracking ID (Trace) for this specific request.
+
+[Step 1] Raw data received: Google hands us a review from "Margaret T."
+Section 1 Intake. The raw data payload arrives via the Google Business Profile API.
+
+[Step 2/3] Official naming: Mapping "review.created" to "review_received"
+Normalization. The system converts the provider's terminology ("review.created") into ClearSky's internal event language ("review_received").
+
+[Step 4/5] Tidying up: Normalized rating to 1 stars
+The system converts various rating formats (like 'ONE' or 'starRating: 1') into a standard numeric integer.
+
+[Step 6] Finding business: Mapped to "Apex Contracting"
+Relationship Matching. The system uses the Google Location ID to find the matching business record for "Apex Contracting" in the ClearSky database.
+
+[Step 7] Copy check: No previous record found
+Duplicate Detection. The system checks if this specific review ID has been processed before to prevent double-replies or redundant alerts.
+
+[Step 8] AI Extraction: Identifying sentiment, topics, and service mentions...
+The system sends the normalized text to the AI Extraction Engine (OpenAI GPT-4o-mini).
+
+[Step 8] AI extraction completed successfully
+The AI has returned structured data (Sentiment: Negative, Urgency: High, Topics: Leaking, Communication).
+
+[Step 9] Writing to log: Saving to database and marking as "Handoff Eligible"
+Persistence. The normalized event and its AI enrichment are saved. Section 1 is complete; the data is now ready for the decision engines.
+
+--------------------------------------------------------------------------------
+
+[PHASE 2: SIGNAL DETECTION]
+
+[Step 10] Signal Detection: Loading the Signal Rule book...
+Section 2 Start. The system loads the 16 standard "Trust" rules for Google Reviews.
+
+[Step 11] Signal Evaluation: Testing this review against our 6 Rule Families...
+The system begins running the review data against different logic categories (Rating, Pattern, Marketing, etc.).
+
+--- ⭐ Family Group: Rating Rules ---
+Rule 1 {SIG-TRUST-001}: negative_review_risk -> ✅ MATCHED
+Logic: "If rating <= 2, then Risk." Result: 1 star matches. Signal created.
+
+Rule 2/3: neutral_review_improvement_opportunity / positive_review_received -> ⚪ SKIPPED
+Logic: These require 3 stars or 4+ stars. The 1-star rating fails these conditions.
+
+--- 💬 Family Group: Comment Rules ---
+Rule 4/5/6: Positive review issues / Communication issues / Praise -> ⚪ SKIPPED
+Logic: These look for specific positive ratings or specific keywords. None matched the "emergency leak" context for these specific rules.
+
+--- 📬 Family Group: Response Status Rules ---
+Rule 8 {SIG-TRUST-008}: negative_review_response_needed -> ⚪ SKIPPED
+Logic: This rule only triggers if a negative review has been sitting for 2+ hours. Since this review was JUST received (0.002 hours ago), it is skipped for now.
+
+--- 📈 Family Group: Pattern Rules ---
+Rule 10/11/12: Bottlenecks / Rating Declines / Momentum -> ⚪ SKIPPED
+Logic: These require looking at 30-90 days of history. No significant historical pattern was matched by this single event.
+
+[Step 12] Final Count: Created 1 Signal candidates.
+Section 2 concludes. One official "Risk" signal (SIG-TRUST-001) is passed to the Brain.
+
+--------------------------------------------------------------------------------
+
+[PHASE 3: ORCHESTRATOR DECISION]
+
+[Step 13] Orchestrator Decision: Selecting the best actions for this review...
+Section 3 Start. The system starts the "Brain" to decide what to do about the Risk signal.
+
+Section 3 - ORCHESTRATOR_STARTED : 1 Signal candidate(s) received
+The Decision Engine receives the "Negative Review Risk" signal.
+
+Section 3 - EVENT_LOADED : business_id=...
+The engine loads the specific profile for Apex Contracting.
+
+Section 3 - CLIENT_PROFILE_LOADED : automation_level=standard
+The engine notes that Apex uses "Standard" automation (human review for public tasks, auto for internal).
+
+Section 3 - SAFETY_RULES_LOADED : 2 safety rules loaded.
+Global safety blocks (like "Never auto-post to Google") are loaded.
+
+Section 3 - CONSULTANT_OWNERSHIP_LOADED : Consultant: Sarah Jenkins
+The engine identifies that Sarah Jenkins is the account manager who needs to be involved.
+
+Section 3 - ORCHESTRATOR_RULES_LOADED : 1 rule(s) loaded...
+The engine loads the logic that maps "Review Risks" to "Drafting Replies."
+
+Section 3 - ACTION_MAPPINGS_LOADED : 1 Signal-to-Action mapping groups loaded
+The engine identifies that for this specific risk, we need a "Reply Draft" and a "Theme Log."
+
+Section 3 - DOMINANT_SIGNAL_IDENTIFIED : Dominant: negative_review_risk...
+The engine confirms that the 1-star review is the most important thing to address.
+
+Section 3 - SIGNALS_SUPPRESSED : Suppressed: SIG-TRUST-008
+The engine proactively mutes the "Response Needed" signal to prevent redundant alerts later.
+
+Section 3 - ACTIONS_IDENTIFIED : 6 mapping(s) found...
+The engine finds all possible action recipes (Drafting, Logging, Notifying).
+
+Section 3 - ACTION_SELECTED : ACT-REV-001 (create_review_reply_draft) -> mode=approval_required
+The engine decides to prepare a reply but sets the lane to "Approval Required" (needs a human).
+
+Section 3 - ACTION_SELECTED : ACT-REV-004 (log_review_complaint_theme) -> mode=automatic
+The engine decides to log the complaint theme internally and sets it to "Automatic" (no human needed).
+
+Section 3 - DECISION_STORED : Decision dec_4d33e6942b saved... Actions: 6 ready, 0 blocked.
+Persistence. The official strategy is saved to the database. Section 3 is complete.
+
+--------------------------------------------------------------------------------
+
+[PHASE 4: ACTION QUEUE & PARAMETERS]
+
+[Step 16] Action Queue: Parameterizing actions for decision dec_4d33e6942b...
+Section 4 Start. The "Dispatcher" takes the strategy and prepares the individual work orders.
+
+Section 4 - STARTED : Processing Decision...
+Initialization of the Parameter Resolution engine.
+
+Section 4 - ACTIONS_RECEIVED : Received 6 action(s) from Orchestrator
+The dispatcher takes the list of 6 tasks generated by the Brain.
+
+Section 4 - LANE_ASSIGNMENT : Action ACT-REV-001 is public-facing. Forced to APPROVAL_REQUIRED...
+Safety Rule Check. Even if a client wanted "Aggressive" automation, Section 4 sees that this is a public reply and locks it into the Approval Lane.
+
+Section 4 - RESOLVING_PARAMS : Resolving 5 parameters for ACT-REV-001
+The system begins filling in the blanks for the review reply.
+
+Section 4 - PARAM_RESOLVED : Resolved {customer_name} -> Margaret T.
+System extracts the name from the raw intake.
+
+Section 4 - PARAM_RESOLVED : Resolved {rating} -> 1
+System extracts the star rating.
+
+Section 4 - PARAM_RESOLVED : Resolved {brand_tone} -> professional
+System pulls the business's preferred tone from their configuration.
+
+Section 4 - PARAM_RESOLVED : Resolved {review_text} -> Emergency! My roof is leaking...
+System pulls the actual complaint text to ensure the reply is context-aware.
+
+Section 4 - ITEM_QUEUED : 🎯 Queued: ACT-REV-001 in lane [APPROVAL_REQUIRED]
+Task 1 is finished and stored in the Work Queue, waiting for a human to hit "Approve."
+
+Section 4 - LANE_ASSIGNMENT : Action ACT-REV-004 using default lane: AUTOMATIC
+The system sees that "Log Theme" is internal and safe, so it keeps it in the Automatic Lane.
+
+Section 4 - PARAM_RESOLVED : Resolved {ai_summary} -> Customer is experiencing a leaking roof...
+The system pulls the summary generated by the AI in Step 8.
+
+Section 4 - ITEM_QUEUED : 🎯 Queued: ACT-REV-004 in lane [AUTOMATIC]
+Task 2 is finished and stored in the Work Queue. It will be executed by the system instantly.
+
+Section 4 - COMPLETED : Successfully parameterized 6 action(s)
+All strategic tasks have been turned into detailed, data-rich work orders.
+
+--- [PIPELINE END] Trace: trc_nqwcrh2 ---
+The processing session ends. The review has successfully moved from "New Alert" to "Ready for Execution."
+================================================================================

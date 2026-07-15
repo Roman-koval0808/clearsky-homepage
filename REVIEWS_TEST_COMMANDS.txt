@@ -1,0 +1,83 @@
+ClearSky Google Review Test Suite - Full 12-Step Pipeline
+Target URL: http://localhost:5173/api/signals/google/review
+
+These commands test the complete journey from Raw Data (Step 1) to Signal Generation (Step 12).
+NOTE: Change "review_id" for each run to avoid "Duplicate Blocked" (Step 7).
+
+--------------------------------------------------------------------------------
+SCENARIO 1: The Raving Fan (Momentum + Testimonial)
+Expected Signals: positive_review_received, service_quality_praise_detected, 
+                  testimonial_candidate_detected, service_proof_point_detected
+--------------------------------------------------------------------------------
+curl -X POST http://localhost:5174/api/signals/google/review \
+     -H "Content-Type: application/json" \
+     -d '{
+      "provider": "google_business_profile",
+      "review_id": "sig_test_fan_'$(date +%s)'",
+      "location_id": "gbp_location_1199",
+      "author_name": "John Doe",
+      "rating": 5,
+      "comment": "Absolutely incredible service! The team replaced my entire roof in two days. Cleaned up everything. Best contractor in Timmins.",
+      "created_time": "'$(date -u +"%Y-%m-%dT%H:%M:%SZ")'"
+     }'
+
+--------------------------------------------------------------------------------
+SCENARIO 2: The Critical Leak (High Risk)
+Expected Signals: negative_review_risk
+--------------------------------------------------------------------------------
+curl -X POST http://localhost:5174/api/signals/google/review \
+     -H "Content-Type: application/json" \
+     -d '{
+      "provider": "google_business_profile",
+      "review_id": "sig_test_risk_'$(date +%s)'",
+      "location_id": "gbp_location_1199",
+      "author_name": "Margaret T.",
+      "rating": 1,
+      "comment": "Emergency! My roof is leaking after the repair they did last week. I have called 5 times and no one answers. Water is coming into my kitchen right now!",
+      "created_time": "'$(date -u +"%Y-%m-%dT%H:%M:%SZ")'"
+     }'
+
+--------------------------------------------------------------------------------
+SCENARIO 3: The Mixed Feedback (Momentum + Bottleneck + Opportunity)
+Expected Signals: positive_review_received, positive_review_with_minor_issue, 
+                  communication_experience_issue_detected, service_quality_praise_detected
+--------------------------------------------------------------------------------
+curl -X POST http://localhost:5174/api/signals/google/review \
+     -H "Content-Type: application/json" \
+     -d '{
+      "provider": "google_business_profile",
+      "review_id": "sig_test_mixed_'$(date +%s)'",
+      "location_id": "gbp_location_1199",
+      "author_name": "Sarah M.",
+      "rating": 4,
+      "comment": "The crew was professional and the job looks good. Only reason I am giving 4 stars is because communication before the appointment was a little slow.",
+      "created_time": "'$(date -u +"%Y-%m-%dT%H:%M:%SZ")'"
+     }'
+
+--------------------------------------------------------------------------------
+SCENARIO 4: Neutral Feedback (Opportunity)
+Expected Signals: neutral_review_improvement_opportunity
+--------------------------------------------------------------------------------
+curl -X POST http://localhost:5174/api/signals/google/review \
+     -H "Content-Type: application/json" \
+     -d '{
+      "provider": "google_business_profile",
+      "review_id": "sig_test_neutral_'$(date +%s)'",
+      "location_id": "gbp_location_1199",
+      "author_name": "Bob B.",
+      "rating": 3,
+      "comment": "Average experience. The roof was fixed but they left some shingles on my lawn. Took a few days to get a callback for the quote.",
+      "created_time": "'$(date -u +"%Y-%m-%dT%H:%M:%SZ")'"
+     }'
+
+--------------------------------------------------------------------------------
+HOW TO VERIFY SIGNALS:
+--------------------------------------------------------------------------------
+1. Check the server console logs for Step 10, 11, and 12.
+2. Run this SQL in your database to see the signals created for the latest event:
+
+SELECT e.event_id, e.review_rating_numeric, s.name, s.bucket 
+FROM events e
+JOIN signals s ON e.id = s.event_id
+ORDER BY e.created_at DESC
+LIMIT 5;

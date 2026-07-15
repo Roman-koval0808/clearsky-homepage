@@ -1,0 +1,72 @@
+openapi: 3.0.0
+info:
+  title: ClearSky Engine API
+  description: API for Revenue Calculator, ContentRadar, and Sessions.
+  version: 1.0.0
+servers:
+  - url: https://clearskysoftware.net
+    description: Production Server
+  - url: http://localhost:5173
+    description: Local Development
+paths:
+  /api/revenue-calculator:
+    post:
+      summary: Revenue Calculator Engine
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                business:
+                  type: object
+                revenue:
+                  type: object
+                operations:
+                  type: object
+      responses:
+        '200':
+          description: OK
+  /api/audit:
+    post:
+      summary: ContentRadar Audit Pipeline
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                firmName:
+                  type: string
+                city:
+                  type: string
+                websiteUrl:
+                  type: string
+      responses:
+        '200':
+          description: OK
+  /api/diagnostic:
+    post:
+      summary: Sessions Diagnostic Orchestrator
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                business:
+                  type: object
+                annualRevenue:
+                  type: number
+      responses:
+        '200':
+          description: OK
+  /api/trades:
+    get:
+      summary: Supported Trades List
+      responses:
+        '200':
+          description: OK

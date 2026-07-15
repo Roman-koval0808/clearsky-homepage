@@ -1,0 +1,9 @@
+{
+	"files.associations": {
+		"*.css": "tailwindcss"
+	},
+	"[svelte]": {
+		"editor.formatOnSave": false,
+		"editor.codeActionsOnSave": {}
+	}
+}

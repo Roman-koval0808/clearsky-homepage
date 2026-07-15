@@ -1,0 +1,673 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DB_URL")
+}
+
+model Form {
+  id               String            @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  title            String
+  description      String?
+  config           Json              @default("{}")
+  created_at       DateTime          @default(now()) @db.Timestamptz(6)
+  updated_at       DateTime          @default(now()) @db.Timestamptz(6)
+  form_submissions FormSubmission[]
+
+  @@map("forms")
+}
+
+model FormSubmission {
+  id           String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  form_id      String   @db.Uuid
+  event_id     String?  @db.Uuid
+  data         Json     @default("{}")
+  submitted_at DateTime @default(now()) @db.Timestamptz(6)
+  form         Form     @relation(fields: [form_id], references: [id], onDelete: Cascade)
+  event        Event?   @relation(fields: [event_id], references: [id])
+
+  @@map("form_submissions")
+}
+
+model Business {
+  id                String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  business_id       String   @unique // e.g., biz_apex_001
+  name              String
+  market_id         String?  // e.g., market_timmins
+  gbp_location_id   String?  @unique
+  gbp_account_id    String?
+  created_at        DateTime @default(now()) @db.Timestamptz(6)
+  
+  events            Event[]
+  customer_profiles CustomerProfile[]
+  orchestrator_profile ClientOrchestratorProfile?
+  business_config      BusinessConfiguration?
+  orchestrator_rules   OrchestratorRule[]
+  action_mappings      SignalActionMapping[]
+
+  @@map("businesses")
+}
+
+model ClientOrchestratorProfile {
+  id                     String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  business_id            String   @unique @db.Uuid
+  automation_level       String   @default("standard") // conservative | standard | aggressive
+  disabled_signal_ids    Json     @default("[]")
+  domain_execution_modes Json     @default("{}") // e.g. {"REV": "approval_required"}
+  domain_owners          Json     @default("{}") // e.g. {"REV": "business_owner"}
+  preferred_reply_length String   @default("medium")
+  include_business_name  Boolean  @default(true)
+  include_call_to_action Boolean  @default(true)
+  active                 Boolean  @default(true)
+  created_at             DateTime @default(now()) @db.Timestamptz(6)
+  updated_at             DateTime @default(now()) @db.Timestamptz(6)
+
+  business               Business @relation(fields: [business_id], references: [id], onDelete: Cascade)
+
+  @@map("client_orchestrator_profiles")
+}
+
+model CustomerProfile {
+  id               String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  business_id      String   @db.Uuid
+  external_id      String?  // e.g. from CRM
+  first_name       String?
+  last_name        String?
+  display_name     String?
+  email            String?
+  phone_number     String?  // normalized format
+  tags             Json     @default("[]")
+  metadata         Json     @default("{}")
+  created_at       DateTime @default(now()) @db.Timestamptz(6)
+  updated_at       DateTime @default(now()) @db.Timestamptz(6)
+
+  business         Business @relation(fields: [business_id], references: [id], onDelete: Cascade)
+  events           Event[]
+  call_events      CallEvent[]
+  voicemails       Voicemail[]
+  website_events   WebsiteEvent[]
+  fingerprint_profiles FingerprintProfile[]
+
+  @@unique([business_id, phone_number])
+  @@unique([business_id, email])
+  @@map("customer_profiles")
+}
+
+model BusinessConfiguration {
+  id                               String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  business_id                      String   @unique @db.Uuid
+  consultant_id                    String?  // e.g. cons_sarah_001
+  consultant_name                  String?  // e.g. Sarah Jenkins
+  consultant_review_required       Boolean  @default(true)
+  primary_internal_owner           String   @default("consultant")
+  approval_route                   String   @default("consultant_then_client")
+  auto_notify_consultant           Boolean  @default(true)
+  auto_notify_business_owner       Boolean  @default(false)
+  after_hours_escalation_owner     String?
+  review_reply_policy              String   @default("draft_only") // draft_only | post_allowed
+  public_response_requires_approval Boolean  @default(true)
+  brand_tone                       String   @default("professional")
+  sla_response_hours               Int      @default(24)
+  office_timezone                  String   @default("UTC")
+  active                           Boolean  @default(true)
+  created_at                       DateTime @default(now()) @db.Timestamptz(6)
+  updated_at                       DateTime @default(now()) @db.Timestamptz(6)
+
+  business                         Business @relation(fields: [business_id], references: [id], onDelete: Cascade)
+
+  @@map("business_configurations")
+}
+
+model FingerprintProfile {
+  id                  String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  fingerprint_id      String   @unique  // fp_xxxxxxxx
+  customer_profile_id String?  @db.Uuid // null until named
+  score_raw           Int      @default(0)
+  bucket              String   @default("unclassified")
+  last_event_at       DateTime @default(now()) @db.Timestamptz(6)
+  created_at          DateTime @default(now()) @db.Timestamptz(6)
+  
+  customer_profile    CustomerProfile? @relation(fields: [customer_profile_id], references: [id])
+
+  @@map("fingerprint_profiles")
+}
+
+model SafetyComplianceRule {
+  id           String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  rule_id      String   @unique
+  rule_name    String
+  conditions   Json
+  block_reason String
+  severity     Int      @default(1)
+  active       Boolean  @default(true)
+  created_at   DateTime @default(now()) @db.Timestamptz(6)
+
+  @@map("safety_compliance_rules")
+}
+
+model OrchestratorRule {
+  id               String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  rule_id          String   @unique
+  rule_name        String
+  signal_rule_id   String
+  conditions       Json?
+  execution_mode   String?
+  owner            String?
+  suppress_signals Json?    @default("[]")
+  scope            String   @default("global") // global | client
+  business_id      String?  @db.Uuid
+  is_safety_rule   Boolean  @default(false)
+  active           Boolean  @default(true)
+  created_at       DateTime @default(now()) @db.Timestamptz(6)
+
+  business         Business? @relation(fields: [business_id], references: [id])
+
+  @@map("orchestrator_rules")
+}
+
+model SignalActionMapping {
+  id             String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  signal_rule_id String
+  action_id      String
+  is_primary     Boolean  @default(false)
+  is_secondary   Boolean  @default(false)
+  business_id    String?  @db.Uuid
+  active         Boolean  @default(true)
+  created_at     DateTime @default(now()) @db.Timestamptz(6)
+
+  business       Business? @relation(fields: [business_id], references: [id])
+
+  @@map("signal_action_mappings")
+}
+
+model ActionLibrary {
+  id                    String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  action_id             String   @unique
+  name                  String
+  domain                String   // e.g. REV, TASK
+  is_public_facing      Boolean  @default(false)
+  calls_a2p             Boolean  @default(false)
+  default_execution_mode String  @default("approval_required")
+  default_owner         String   @default("system")
+  required_params       Json     @default("[]")
+  active                Boolean  @default(true)
+  created_at            DateTime @default(now()) @db.Timestamptz(6)
+
+  @@map("action_library")
+}
+
+model RawWebhookLog {
+  id           String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  provider     String
+  event_type   String
+  external_id  String?  // call_id, message_id etc
+  raw_payload  Json
+  received_at  DateTime @default(now()) @db.Timestamptz(6)
+
+  @@map("raw_webhook_logs")
+}
+
+model CallEvent {
+  id               String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  call_event_id    String   @unique // ce_...
+  call_id          String   @unique // Telnyx call_control_id
+  caller_id        String?  // phone number
+  called_number    String?
+  call_started_at  DateTime @default(now()) @db.Timestamptz(6)
+  call_ended_at    DateTime? @db.Timestamptz(6)
+  channel          String   @default("phone")
+  call_priority    String   @default("standard") // standard | emergency
+  call_outcome     String   @default("pending")
+  ivr_path         String?  // e.g. "main_menu > service_dept"
+  recording_url    String?
+  profile_id       String?  @db.Uuid
+  transcript_id    String?  @db.Uuid
+  ai_analysis_id   String?  @db.Uuid
+
+  customer_profile CustomerProfile? @relation(fields: [profile_id], references: [id])
+  events           Event[]
+  voicemails       Voicemail[]
+
+  @@map("call_events")
+}
+
+model Voicemail {
+  id                String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  voicemail_id      String   @unique // vm_...
+  call_event_id     String   @db.Uuid
+  profile_id        String?  @db.Uuid
+  recording_url     String?
+  duration_seconds  Int?
+  transcript_status String   @default("pending") // pending | completed | failed
+  transcript_id     String?  @db.Uuid
+  ai_analysis_id    String?  @db.Uuid
+  captured_at       DateTime @default(now()) @db.Timestamptz(6)
+
+  call_event       CallEvent @relation(fields: [call_event_id], references: [id], onDelete: Cascade)
+  customer_profile CustomerProfile? @relation(fields: [profile_id], references: [id])
+
+  @@map("voicemails")
+}
+
+model OrchestratorDecision {
+  id                         String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  decision_id                String   @unique // dec_...
+  event_id                   String   @db.Uuid
+  dominant_signal_id         String?  @db.Uuid
+  supporting_signal_ids      Json     @default("[]")
+  selected_action_ids        Json     @default("[]")
+  blocked_action_ids         Json     @default("[]")
+  execution_mode             String
+  owner                      String
+  priority                   Int
+  reason                     String?
+  business_config_snapshot   Json?
+  safety_checks_passed       Boolean  @default(false)
+  consultant_review_required Boolean  @default(true)
+  consultant_id              String?
+  approval_route             String?
+  created_at                 DateTime @default(now()) @db.Timestamptz(6)
+
+  event                      Event    @relation(fields: [event_id], references: [id], onDelete: Cascade)
+  action_queue               ActionQueue[]
+
+  @@map("orchestrator_decisions")
+}
+
+model ActionQueue {
+  id                         String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  queue_trace_id             String?  @unique // qtrace_...
+  decision_id                String   @db.Uuid
+  action_id                  String
+  execution_lane             String   // automatic, approval_required, blocked, manual
+  parameters                 Json     @default("{}")
+  status                     String   @default("pending") // pending_approval, ready_for_execution, blocked_audit, failed
+  due_at                     DateTime? @db.Timestamptz(6)
+  
+  // Consultant Context (Preserved from Decision)
+  consultant_id              String?
+  consultant_review_required Boolean  @default(false)
+  approval_route             String?
+  
+  created_at                 DateTime @default(now()) @db.Timestamptz(6)
+  updated_at                 DateTime @default(now()) @db.Timestamptz(6)
+
+  decision       OrchestratorDecision @relation(fields: [decision_id], references: [id], onDelete: Cascade)
+  executions     ActionExecution[]
+
+  @@map("action_queue")
+}
+
+model Event {
+  id                         String             @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  event_id                   String             @unique 
+  trace_id                   String?            
+  provider                   String?            
+  provider_id                String?            
+  provider_event_name        String?            
+  provider_event_id          String?            @unique
+  provider_resource_name     String?
+  event_type                 String
+  network_category           String             @default("Communication")
+  source_channel             String?
+
+  // Relationship Fields
+  business_id                String?            @db.Uuid
+  business_external_id       String?            // biz_apex_001
+  customer_id                String?            
+  customer_profile_id        String?            @db.Uuid
+  call_event_id              String?            @db.Uuid
+  market_id                  String?            
+  gbp_account_id             String?
+  gbp_location_id            String?
+
+  // Review Content Fields
+  review_id                  String?            
+  review_rating_raw          String?
+  review_rating_numeric      Int?
+  review_text                String?
+  review_language            String?
+  review_word_count          Int?
+  review_has_comment         Boolean            @default(false)
+  review_has_media           Boolean            @default(false)
+
+  // Reviewer Fields
+  reviewer_display_name      String?
+  author_name                String?
+  reviewer_profile_photo_url String?
+  reviewer_is_anonymous      Boolean            @default(false)
+
+  // Reply Fields
+  business_reply_exists      Boolean            @default(false)
+  business_reply_text        String?
+  business_reply_state       String?
+
+  // Timing Fields
+  occurred_at                DateTime?          @default(now()) @db.Timestamptz(6)
+  provider_updated_at        DateTime?          @default(now()) @db.Timestamptz(6)
+  received_at                DateTime?          @default(now()) @db.Timestamptz(6)
+  created_at                 DateTime?          @default(now()) @db.Timestamptz(6)
+
+  // Processing Fields
+  is_duplicate               Boolean            @default(false)
+  requires_ai_extraction     Boolean            @default(false)
+  ai_extraction_completed    Boolean            @default(false)
+  processing_status          String             @default("received")
+  handoff_eligible           Boolean            @default(false)
+  unstructured_text          String?
+
+  business                   Business?          @relation(fields: [business_id], references: [id])
+  customer_profile           CustomerProfile?   @relation(fields: [customer_profile_id], references: [id])
+  call_event                 CallEvent?         @relation(fields: [call_event_id], references: [id])
+  signals                    Signal[]
+  enrichments                Enrichment[]
+  form_submissions           FormSubmission[]
+  actions                    Action[]
+  approvals                  Approval[]
+  feedbacks                  Feedback[]
+  complaint_theme_logs       ComplaintThemeLog[]
+  orchestrator_decisions     OrchestratorDecision[]
+  outcomes                   Outcome[]
+  blocked_outcome_contexts   BlockedOutcomeContext[]
+  feedback_records           FeedbackRecord[]
+  feedback_context_items     FeedbackContextItem[]
+
+  @@map("events")
+}
+
+model Enrichment {
+  id                         String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  event_id                   String   @db.Uuid
+
+  // AI Fact Extraction (New deterministic fields)
+  ai_contains_problem           Boolean? @default(false)
+  ai_contains_quote_request     Boolean? @default(false)
+  ai_contains_callback_request  Boolean? @default(false)
+  ai_contains_emergency_keywords Boolean? @default(false)
+  ai_requested_contact_method   String?  // e.g. "phone", "email", "text"
+  ai_requested_action           String?  // e.g. "phone_call", "send_quote"
+  ai_detected_keywords          Json?    @default("[]")
+
+  // AI Context Fields
+  ai_sentiment               String?
+  ai_sentiment_score         Float?
+  ai_review_tone             String?
+  ai_praise_detected         Boolean? @default(false)
+  ai_complaint_detected      Boolean? @default(false)
+  ai_praise_topics           Json?    @default("[]")
+  ai_complaint_topics        Json?    @default("[]")
+  ai_primary_praise_topic    String?
+  ai_primary_complaint_topic String?
+  ai_service_mentioned       String?
+  ai_customer_experience_issue String?
+  ai_urgency_level           String?
+  ai_summary                 String?
+  ai_suggested_response_type String?
+  ai_confidence_score        Float?
+
+  // Legacy fields (optional compatibility)
+  intent                     String?
+  service_requested          String?
+  problem_type               String?
+  urgency_level              String?
+  timeline                   String?
+  sentiment                  String?
+  summary                    String?
+  confidence_score           Float?
+
+  created_at                 DateTime @default(now()) @db.Timestamptz(6)
+  event                      Event    @relation(fields: [event_id], references: [id], onDelete: Cascade)
+
+  @@map("enrichment")
+}
+
+model Signal {
+  id             String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  event_id       String?   @db.Uuid
+  signal_rule_id String?   // Added to track which rule created the signal
+  name           String
+  bucket         String
+  priority       Int       @default(2)
+  confidence     Float     @default(1.0)
+  status         String    @default("candidate") // candidate | valid | suppressed
+  created_at     DateTime? @default(now()) @db.Timestamptz(6)
+  event          Event?    @relation(fields: [event_id], references: [id], onDelete: Cascade)
+  actions        Action[]
+
+  @@map("signals")
+}
+
+model Action {
+  id             String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  event_id       String?   @db.Uuid
+  signal_id      String?   @db.Uuid
+  action_id      String?
+  title          String?
+  status         String    @default("queued")
+  priority       Int       @default(2)
+  execution_mode String    @default("approval_required")
+  created_at     DateTime? @default(now()) @db.Timestamptz(6)
+  
+  event          Event?    @relation(fields: [event_id], references: [id], onDelete: Cascade)
+  signal         Signal?   @relation(fields: [signal_id], references: [id], onDelete: SetNull)
+  approvals      Approval[]
+  feedbacks      Feedback[]
+
+  @@map("actions")
+}
+
+model Approval {
+  id         String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  event_id   String?   @db.Uuid
+  action_id  String?   @db.Uuid
+  type       String?
+  content    String?
+  status     String    @default("pending")
+  created_at DateTime? @default(now()) @db.Timestamptz(6)
+  
+  event      Event?    @relation(fields: [event_id], references: [id], onDelete: Cascade)
+  action     Action?   @relation(fields: [action_id], references: [id], onDelete: Cascade)
+
+  @@map("approvals")
+}
+
+model Metric {
+  id                       String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  revenue_growth           Float    @default(0)
+  booked_work              Float    @default(0)
+  reputation_score         Float    @default(0)
+  suppressed_count         Int      @default(0)
+  human_intervention_rate  Float    @default(0)
+  ai_accuracy              Float    @default(0)
+  created_at               DateTime @default(now()) @db.Timestamptz(6)
+
+  @@map("metrics")
+}
+
+model Outcome {
+  id                      String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  outcome_id              String   @unique
+  event_id                String
+  decision_id             String
+  action_queue_id         String
+  execution_id            String
+  action_id               String
+  outcome_type            String
+  outcome_status          String
+  time_to_response_hours  Float?
+  approval_wait_hours     Float?
+  human_edited            Boolean  @default(false)
+  posted_externally       Boolean  @default(false)
+  do_not_count_as_success Boolean  @default(false)
+  details                 Json?
+  feedback_id             String?  // written by Section 7 Step 4
+  created_at              DateTime @default(now()) @db.Timestamptz(6)
+  updated_at              DateTime @default(now()) @db.Timestamptz(6)
+
+  event                   Event           @relation(fields: [event_id], references: [event_id], onDelete: Cascade)
+  feedback_record         FeedbackRecord? @relation(fields: [feedback_id], references: [feedback_id])
+
+  @@map("outcomes")
+}
+
+model FeedbackRecord {
+  id                        String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  feedback_id               String   @unique
+  event_id                  String
+  decision_id               String
+  action_queue_id           String
+  execution_id              String
+  outcome_id                String
+  action_id                 String
+  signal_validity           String?
+  // likely_valid | invalid | uncertain
+  decision_quality          String?
+  // reasonable_so_far | questionable | not_applicable
+  action_execution_quality  String?
+  // worked_as_expected | worked_as_expected_so_far | did_not_work | not_applicable
+  outcome_result              String?
+  // completed | partial_completion | failed | blocked_by_policy | waiting
+  human_review_state          String?
+  // waiting_for_human_approval | approved | rejected | edited | not_applicable
+  tuning_candidates           Json     @default("[]")
+  production_rules_changed    Boolean  @default(false)   // ALWAYS false at Section 7 insert
+  feedback_rules_snapshot_id String?
+  details                     Json?
+  created_at                DateTime @default(now()) @db.Timestamptz(6)
+  updated_at                DateTime @default(now()) @db.Timestamptz(6)
+
+  event                     Event    @relation(fields: [event_id], references: [event_id], onDelete: Cascade)
+  outcomes                  Outcome[]
+
+  @@map("feedback_records")
+}
+
+model FeedbackContextItem {
+  id                    String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  feedback_context_id   String   @unique
+  event_id              String
+  decision_id           String
+  blocked_context_id    String
+  action_id             String
+  feedback_context_type String   @default("blocked_by_policy")
+  is_execution_failure  Boolean  @default(false)
+  notes                 String?
+  created_at            DateTime @default(now()) @db.Timestamptz(6)
+
+  event                 Event    @relation(fields: [event_id], references: [event_id], onDelete: Cascade)
+
+  @@map("feedback_context_items")
+}
+
+model BlockedOutcomeContext {
+  id                        String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  blocked_context_id        String   @unique
+  event_id                  String
+  decision_id               String
+  action_id                 String
+  action_name               String?
+  blocked_reason            String?
+  outcome_type              String   @default("blocked_preserved")
+  outcome_status            String   @default("blocked")
+  posted_to_google          Boolean  @default(false)
+  external_action_completed Boolean  @default(false)
+  do_not_count_as_success   Boolean  @default(true)
+  created_at                DateTime @default(now()) @db.Timestamptz(6)
+
+  event                     Event    @relation(fields: [event_id], references: [event_id], onDelete: Cascade)
+
+  @@map("blocked_outcome_context")
+}
+
+model Feedback {
+  id          String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  event_id    String?   @db.Uuid
+  action_id   String?   @db.Uuid
+  type        String?
+  content     String?
+  created_at  DateTime? @default(now()) @db.Timestamptz(6)
+
+  event       Event?    @relation(fields: [event_id], references: [id], onDelete: Cascade)
+  action      Action?   @relation(fields: [action_id], references: [id], onDelete: Cascade)
+
+  @@map("feedback")
+}
+
+model ActionExecution {
+  id                  String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  action_execution_id String   @unique // exec_...
+  action_queue_id     String   @db.Uuid
+  action_id           String
+  execution_mode      String
+  execution_status    String   @default("created_pending_route")
+  generated_output    String?
+  approval_status     String?
+  approval_owner      String?
+  requires_human_approval Boolean @default(false)
+  approved_at          DateTime? @db.Timestamptz(6)
+  rejected_at          DateTime? @db.Timestamptz(6)
+  human_edited         Boolean  @default(false)
+  edited_output        String?
+  posted_externally   Boolean  @default(false)
+  outcome_id          String?
+  failure_reason      String?
+  retry_count          Int     @default(0)
+  created_at          DateTime @default(now()) @db.Timestamptz(6)
+  updated_at          DateTime @default(now()) @db.Timestamptz(6)
+
+  action_queue        ActionQueue @relation(fields: [action_queue_id], references: [id], onDelete: Cascade)
+  approval_packages   ApprovalPackage[]
+  complaint_logs      ComplaintThemeLog[]
+
+  @@map("action_executions")
+}
+
+model ApprovalPackage {
+  id                  String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  approval_package_id String   @unique // approval_pkg_...
+  execution_id        String   @db.Uuid
+  owner               String
+  status              String   @default("pending_approval")
+  created_at          DateTime @default(now()) @db.Timestamptz(6)
+  updated_at          DateTime @default(now()) @db.Timestamptz(6)
+
+  execution           ActionExecution @relation(fields: [execution_id], references: [id], onDelete: Cascade)
+
+  @@map("approval_packages")
+}
+
+model ComplaintThemeLog {
+  id          String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  event_id    String   @db.Uuid
+  exec_id     String   @db.Uuid // references ActionExecution.id
+  theme       String
+  created_at  DateTime @default(now()) @db.Timestamptz(6)
+
+  event       Event    @relation(fields: [event_id], references: [id], onDelete: Cascade)
+  execution   ActionExecution @relation(fields: [exec_id], references: [id], onDelete: Cascade)
+
+  @@map("complaint_theme_logs")
+}
+
+model WebsiteEvent {
+  id                  String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  event_id            String   @unique
+  session_id          String?
+  fingerprint_id      String?
+  event_type          String
+  intent_bucket       String?
+  engagement_score    Int?     @default(0)
+  page_url            String?
+  customer_email      String?
+  customer_phone      String?
+  customer_name       String?
+  payload             Json     @default("{}")
+  occurred_at         DateTime @default(now()) @db.Timestamptz(6)
+
+  customer_profile_id String?  @db.Uuid
+  customer_profile    CustomerProfile? @relation(fields: [customer_profile_id], references: [id])
+
+  @@map("website_events")
+}
